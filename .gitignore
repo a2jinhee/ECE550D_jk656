@@ -1,0 +1,14 @@
+# Quartus / simulation build artifacts
+db/
+incremental_db/
+output_files/
+simulation/
+.qsys_edit/
+
+# Project/workspace metadata (regenerates automatically)
+*.qpf
+*.qsf
+*.qws
+
+# Backup or auto-save files
+*.bak
