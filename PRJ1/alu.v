@@ -1,61 +1,50 @@
 module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_result, isNotEqual, isLessThan, overflow);
 
-    input [31:0] data_operandA, data_operandB;
-    input [4:0] ctrl_ALUopcode, ctrl_shiftamt;
+    input [31:0] data_operandA, data_operandB; // signed
+    input [4:0] ctrl_ALUopcode;
+    input [4:0] ctrl_shiftamt; // not used
 
     output [31:0] data_result;
-    output isNotEqual, isLessThan, overflow;
+    output isNotEqual, isLessThan; // not used
+    output overflow; // True iff overflow in ADD or SUB
 
-    // opcode wires for this checkpoint
-    wire op_sub;
-    assign op_sub = ctrl_ALUopcode[0];      // 00001 means subtract
-    // For any other opcode, treat as add for this checkpoint
-    wire op_add;
-    not  g_not_add(op_add_n, ctrl_ALUopcode[0]);
-    assign op_add = op_add_n;
+    // Assign ALU opcodes
+    wire op_add, op_sub;
+    not not_op_code(op_add, ctrl_ALUopcode[0]); // gate primitive
+    assign op_sub = ctrl_ALUopcode[0];
 
-    // Two’s complement transform of B for subtraction
-    wire [31:0] B2;
+    // 2’s complement of B if SUB 
     // XOR each bit with op_sub
+    // 32 bit carry select adder: A + B2 + cin
+    // cin is 0 for ADD, op_sub for SUB (2's complement)
+    wire [31:0] B2;
     genvar xi;
     generate
         for (xi = 0; xi < 32; xi = xi + 1) begin: XOR_B_WITH_SUB
             xor xorb(B2[xi], data_operandB[xi], op_sub);
         end
     endgenerate
-
-    // 32 bit carry select adder: A + B2 + cin
-    // cin is op_sub for subtraction, 0 for addition
     wire cin0, cin1;
     assign cin0 = 1'b0;
     assign cin1 = 1'b1;
-
-    // Carry endpoints between 4 bit blocks
-    wire c4, c8, c12, c16, c20, c24, c28, c32;
-
-    // Carry choose wires per block
-    wire sel0;               // selects between precomputed cin0 or cin1 for block0
-    assign sel0 = op_sub;    // first block select is the real input carry
-
+    
+    wire sel0; // sel for block0 carry in (cin0 or cin1)
+    assign sel0 = op_sub;
+    wire c4, c8, c12, c16, c20, c24, c28, c32; // Carry wires for rca4 blocks
     wire [31:0] sum;
 
-    // Precompute for each 4 bit block with cin 0 and cin 1, then mux by the selected carry
+    // ! Precompute rca4 with 1) cin=0 and 2) cin=1, then mux sel0, c4, c8, ... 
+    
     // Block 0: bits [3:0]
-    wire [3:0] s0_c0, s0_c1;
-    wire       c4_c0, c4_c1;
-
+    wire [3:0] s0_c0, s0_c1; wire c4_c0, c4_c1;
     rca4 u0_c0(.a(data_operandA[3:0]),  .b(B2[3:0]),  .cin(cin0), .sum(s0_c0), .cout(c4_c0));
     rca4 u0_c1(.a(data_operandA[3:0]),  .b(B2[3:0]),  .cin(cin1), .sum(s0_c1), .cout(c4_c1));
-
     assign {c4, sum[3:0]} = sel0 ? {c4_c1, s0_c1} : {c4_c0, s0_c0};
 
     // Block 1: bits [7:4]
-    wire [3:0] s1_c0, s1_c1;
-    wire       c8_c0, c8_c1;
-
+    wire [3:0] s1_c0, s1_c1; wire c8_c0, c8_c1;
     rca4 u1_c0(.a(data_operandA[7:4]),  .b(B2[7:4]),  .cin(cin0), .sum(s1_c0), .cout(c8_c0));
     rca4 u1_c1(.a(data_operandA[7:4]),  .b(B2[7:4]),  .cin(cin1), .sum(s1_c1), .cout(c8_c1));
-
     assign {c8, sum[7:4]} = c4 ? {c8_c1, s1_c1} : {c8_c0, s1_c0};
 
     // Block 2: bits [11:8]
@@ -94,7 +83,7 @@ module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_res
     rca4 u7_c1(.a(data_operandA[31:28]), .b(B2[31:28]), .cin(cin1), .sum(s7_c1), .cout(c32_c1));
     assign {c32, sum[31:28]} = c28 ? {c32_c1, s7_c1} : {c32_c0, s7_c0};
 
-    // Output result
+    // Sum
     assign data_result = sum;
 
     // Overflow for signed add or subtract:
@@ -116,16 +105,13 @@ module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_res
     and a4(t4, t3,  s31);
     or  o1(overflow, t2, t4);
 
-    // Not required this checkpoint
+    // Not used
     assign isNotEqual = 1'b0;
     assign isLessThan = 1'b0;
 
 endmodule
 
-
-// ------------------------------
-// 4 bit ripple carry adder block
-// ------------------------------
+// 4 bit rca4
 module rca4(
     input  [3:0] a,
     input  [3:0] b,
@@ -141,11 +127,9 @@ module rca4(
     fa fa3(.a(a[3]), .b(b[3]), .cin(c3),  .s(sum[3]), .cout(cout));
 endmodule
 
-// ------------------------------
-// 1 bit full adder using gates
+// 1 bit FA using gates
 // s = a XOR b XOR cin
 // cout = ab + a cin + b cin
-// ------------------------------
 module fa(
     input  a, b, cin,
     output s, cout
