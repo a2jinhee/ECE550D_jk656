@@ -1,78 +1,48 @@
+// % top module alu
 module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_result, isNotEqual, isLessThan, overflow);
 
     input [31:0] data_operandA, data_operandB; // signed
     input [4:0] ctrl_ALUopcode;
-    input [4:0] ctrl_shiftamt; // not used
+    input [4:0] ctrl_shiftamt; // used in SLL and SRA
 
     output [31:0] data_result;
-    output isNotEqual, isLessThan; // not used
-    output overflow; // True iff overflow in ADD or SUB
+    output isNotEqual, isLessThan; // needs to be correct after SUB
+    output overflow; // needs to be correct after ADD/SUB
 
-    // ------------------------------------------------------------
-    // Decode opcodes into one hot wires using gate primitives
-    // 00000 ADD
-    // 00001 SUB
-    // 00010 AND
-    // 00011 OR
-    // 00100 SLL
-    // 00101 SRA
-    // ------------------------------------------------------------
     wire b4, b3, b2, b1, b0;
-    assign {b4,b3,b2,b1,b0} = ctrl_ALUopcode;
-
     wire nb4, nb3, nb2, nb1, nb0;
+    assign {b4,b3,b2,b1,b0} = ctrl_ALUopcode;
     not n4(nb4, b4); not n3(nb3, b3); not n2(nb2, b2); not n1(nb1, b1); not n0(nb0, b0);
 
+    // % ctrl_ALUopcode related wires
     wire op_add, op_sub, op_and, op_or, op_sll, op_sra;
-    // op_add = ~b4 & ~b3 & ~b2 & ~b1 & ~b0
-    wire t_add0, t_add1, t_add2, t_add3;
-    and a_add0(t_add0, nb4, nb3);
-    and a_add1(t_add1, nb2, nb1);
-    and a_add2(t_add2, t_add0, t_add1);
-    and a_add3(op_add, t_add2, nb0);
 
-    // op_sub = ~b4 & ~b3 & ~b2 & ~b1 & b0
-    wire t_sub0, t_sub1, t_sub2;
-    and a_sub0(t_sub0, nb4, nb3);
-    and a_sub1(t_sub1, nb2, nb1);
-    and a_sub2(t_sub2, t_sub0, t_sub1);
-    and a_sub3(op_sub, t_sub2, b0);
+    wire t_add0, t_add1, t_add2, t_add3; // op_add = ~b4 & ~b3 & ~b2 & ~b1 & ~b0 (00000)
+    and a_add0(t_add0, nb4, nb3); and a_add1(t_add1, nb2, nb1); 
+    and a_add2(t_add2, t_add0, t_add1); and a_add3(op_add, t_add2, nb0);
 
-    // op_and = ~b4 & ~b3 & ~b2 & b1 & ~b0
-    wire t_and0, t_and1, t_and2;
-    and a_and0(t_and0, nb4, nb3);
-    and a_and1(t_and1, nb2, b1);
-    and a_and2(t_and2, t_and0, t_and1);
-    and a_and3(op_and, t_and2, nb0);
+    wire t_sub0, t_sub1, t_sub2; // op_sub = ~b4 & ~b3 & ~b2 & ~b1 & b0 (00001)
+    and a_sub0(t_sub0, nb4, nb3); and a_sub1(t_sub1, nb2, nb1); 
+    and a_sub2(t_sub2, t_sub0, t_sub1); and a_sub3(op_sub, t_sub2, b0);
 
-    // op_or  = ~b4 & ~b3 & ~b2 & b1 & b0
-    wire t_or0, t_or1, t_or2;
-    and a_or0(t_or0, nb4, nb3);
-    and a_or1(t_or1, nb2, b1);
-    and a_or2(t_or2, t_or0, t_or1);
-    and a_or3(op_or, t_or2, b0);
+    wire t_and0, t_and1, t_and2; // op_and = ~b4 & ~b3 & ~b2 & b1 & ~b0 (00010)
+    and a_and0(t_and0, nb4, nb3); and a_and1(t_and1, nb2, b1); 
+    and a_and2(t_and2, t_and0, t_and1); and a_and3(op_and, t_and2, nb0);
 
-    // op_sll = ~b4 & ~b3 & b2 & nb1 & nb0  (00100)
-    wire t_sll0, t_sll1;
-    and a_sll0(t_sll0, nb4, nb3);
-    and a_sll1(t_sll1, t_sll0, b2);
-    wire t_sll2;
-    and a_sll2(t_sll2, nb1, nb0);
-    and a_sll3(op_sll, t_sll1, t_sll2);
+    wire t_or0, t_or1, t_or2; // op_or  = ~b4 & ~b3 & ~b2 & b1 & b0 (00011)
+    and a_or0(t_or0, nb4, nb3); and a_or1(t_or1, nb2, b1); 
+    and a_or2(t_or2, t_or0, t_or1); and a_or3(op_or, t_or2, b0);
 
-    // op_sra = ~b4 & ~b3 & b2 & nb1 & b0   (00101)
-    wire t_sra0, t_sra1;
-    and a_sra0(t_sra0, nb4, nb3);
-    and a_sra1(t_sra1, t_sra0, b2);
-    wire t_sra2;
-    and a_sra2(t_sra2, nb1, b0);
-    and a_sra3(op_sra, t_sra1, t_sra2);
+    wire t_sll0, t_sll1, t_sll2; // op_sll = ~b4 & ~b3 & b2 & nb1 & nb0  (00100)
+    and a_sll0(t_sll0, nb4, nb3); and a_sll1(t_sll1, t_sll0, b2);
+    and a_sll2(t_sll2, nb1, nb0); and a_sll3(op_sll, t_sll1, t_sll2);
 
-    // ------------------------------------------------------------
-    // Add and Sub using carry select over eight 4 bit RCA blocks
-    // B2 is B xor op_sub to form two’s complement path
-    // ------------------------------------------------------------
-    wire [31:0] B2;
+    wire t_sra0, t_sra1, t_sra2; // op_sra = ~b4 & ~b3 & b2 & nb1 & b0   (00101)
+    and a_sra0(t_sra0, nb4, nb3); and a_sra1(t_sra1, t_sra0, b2);
+    and a_sra2(t_sra2, nb1, b0); and a_sra3(op_sra, t_sra1, t_sra2);
+
+    // % ADD and SUB using carry select over eight 4 bit RCA blocks
+    wire [31:0] B2; // B xor op_sub to form SUB 2's complement
     genvar xi;
     generate
         for (xi = 0; xi < 32; xi = xi + 1) begin: XOR_B_WITH_SUB
@@ -90,74 +60,60 @@ module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_res
     wire c4, c8, c12, c16, c20, c24, c28, c32;
     wire [31:0] sum;
 
-    // Block 0
+    // * Block 0~7
     wire [3:0] s0_c0, s0_c1; wire c4_c0, c4_c1;
     rca4 u0_c0(.a(data_operandA[3:0]),  .b(B2[3:0]),  .cin(cin0), .sum(s0_c0), .cout(c4_c0));
     rca4 u0_c1(.a(data_operandA[3:0]),  .b(B2[3:0]),  .cin(cin1), .sum(s0_c1), .cout(c4_c1));
     assign {c4, sum[3:0]} = sel0 ? {c4_c1, s0_c1} : {c4_c0, s0_c0};
 
-    // Block 1
     wire [3:0] s1_c0, s1_c1; wire c8_c0, c8_c1;
     rca4 u1_c0(.a(data_operandA[7:4]),  .b(B2[7:4]),  .cin(cin0), .sum(s1_c0), .cout(c8_c0));
     rca4 u1_c1(.a(data_operandA[7:4]),  .b(B2[7:4]),  .cin(cin1), .sum(s1_c1), .cout(c8_c1));
     assign {c8, sum[7:4]} = c4 ? {c8_c1, s1_c1} : {c8_c0, s1_c0};
 
-    // Block 2
     wire [3:0] s2_c0, s2_c1; wire c12_c0, c12_c1;
     rca4 u2_c0(.a(data_operandA[11:8]), .b(B2[11:8]), .cin(cin0), .sum(s2_c0), .cout(c12_c0));
     rca4 u2_c1(.a(data_operandA[11:8]), .b(B2[11:8]), .cin(cin1), .sum(s2_c1), .cout(c12_c1));
     assign {c12, sum[11:8]} = c8 ? {c12_c1, s2_c1} : {c12_c0, s2_c0};
-
-    // Block 3
-    wire [3:0] s3_c0, s3_c1; wire c16_c0, c16_c1;
+    
+    wire [3:0] s3_c0, s3_c1; wire c16_c0, c16_c1; 
     rca4 u3_c0(.a(data_operandA[15:12]), .b(B2[15:12]), .cin(cin0), .sum(s3_c0), .cout(c16_c0));
     rca4 u3_c1(.a(data_operandA[15:12]), .b(B2[15:12]), .cin(cin1), .sum(s3_c1), .cout(c16_c1));
     assign {c16, sum[15:12]} = c12 ? {c16_c1, s3_c1} : {c16_c0, s3_c0};
 
-    // Block 4
     wire [3:0] s4_c0, s4_c1; wire c20_c0, c20_c1;
     rca4 u4_c0(.a(data_operandA[19:16]), .b(B2[19:16]), .cin(cin0), .sum(s4_c0), .cout(c20_c0));
     rca4 u4_c1(.a(data_operandA[19:16]), .b(B2[19:16]), .cin(cin1), .sum(s4_c1), .cout(c20_c1));
     assign {c20, sum[19:16]} = c16 ? {c20_c1, s4_c1} : {c20_c0, s4_c0};
-
-    // Block 5
+    
     wire [3:0] s5_c0, s5_c1; wire c24_c0, c24_c1;
     rca4 u5_c0(.a(data_operandA[23:20]), .b(B2[23:20]), .cin(cin0), .sum(s5_c0), .cout(c24_c0));
     rca4 u5_c1(.a(data_operandA[23:20]), .b(B2[23:20]), .cin(cin1), .sum(s5_c1), .cout(c24_c1));
     assign {c24, sum[23:20]} = c20 ? {c24_c1, s5_c1} : {c24_c0, s5_c0};
 
-    // Block 6
     wire [3:0] s6_c0, s6_c1; wire c28_c0, c28_c1;
     rca4 u6_c0(.a(data_operandA[27:24]), .b(B2[27:24]), .cin(cin0), .sum(s6_c0), .cout(c28_c0));
     rca4 u6_c1(.a(data_operandA[27:24]), .b(B2[27:24]), .cin(cin1), .sum(s6_c1), .cout(c28_c1));
     assign {c28, sum[27:24]} = c24 ? {c28_c1, s6_c1} : {c28_c0, s6_c0};
 
-    // Block 7
-    wire [3:0] s7_c0, s7_c1; wire c32_c0, c32_c1;
+    wire [3:0] s7_c0, s7_c1; wire c32_c0, c32_c1; 
     rca4 u7_c0(.a(data_operandA[31:28]), .b(B2[31:28]), .cin(cin0), .sum(s7_c0), .cout(c32_c0));
     rca4 u7_c1(.a(data_operandA[31:28]), .b(B2[31:28]), .cin(cin1), .sum(s7_c1), .cout(c32_c1));
     assign { c32 , sum[31:28]} = c28 ? {c32_c1, s7_c1} : {c32_c0, s7_c0};
 
-    // Signed overflow for ADD or SUB (with B2)
+    // * Signed overflow for ADD or SUB (with B2)
     wire a31 = data_operandA[31];
     wire b31 = B2[31];
     wire s31 = sum[31];
 
     wire na31, nb31, ns31;
-    not na_(na31, a31);
-    not nb_(nb31, b31);
-    not ns_(ns31, s31);
+    not na_(na31, a31); not nb_(nb31, b31); not ns_(ns31, s31);
 
     wire t1, t2, t3, t4;
-    and a1(t1, a31, b31);
-    and a2(t2, t1, ns31);
-    and a3(t3, na31, nb31);
-    and a4(t4, t3, s31);
+    and a1(t1, a31, b31); and a2(t2, t1, ns31); and a3(t3, na31, nb31); and a4(t4, t3, s31);
     or  o1(overflow, t2, t4);
 
-    // ------------------------------------------------------------
-    // Bitwise AND and OR without built in operators
-    // ------------------------------------------------------------
+    // % Bitwise AND and OR 
     wire [31:0] and_res, or_res;
     genvar bi;
     generate
@@ -167,29 +123,13 @@ module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_res
         end
     endgenerate
 
-    // ------------------------------------------------------------
-    // Barrel shifters without << or >>
-    // Five stages 1,2,4,8,16 using 2 to 1 muxes
-    // ------------------------------------------------------------
+    // % Barrel shifters - Five stages 1,2,4,8,16 using 2-1 MUX
     wire [31:0] sll_out, sra_out;
+    barrel_sll32 u_sll(.in (data_operandA), .sa (ctrl_shiftamt), .out(sll_out));
+    barrel_sra32 u_sra(.in (data_operandA), .sa (ctrl_shiftamt), .out(sra_out));
 
-    barrel_sll32 u_sll(
-        .in (data_operandA),
-        .sa (ctrl_shiftamt),
-        .out(sll_out)
-    );
-
-    barrel_sra32 u_sra(
-        .in (data_operandA),
-        .sa (ctrl_shiftamt),
-        .out(sra_out)
-    );
-
-    // ------------------------------------------------------------
-    // isNotEqual and isLessThan
-    // isNotEqual is OR reduce of sum from A - B
-    // isLessThan is s31 xor overflow from A - B
-    // ------------------------------------------------------------
+    // % isNotEqual is OR reduce of sum from A - B
+    // % isLessThan is s31 xor overflow from A - B
     wire neq_or;
     reduce_or32 u_red(.in(sum), .out(neq_or));
     assign isNotEqual = neq_or;
@@ -198,10 +138,7 @@ module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_res
     xor x_lt(lt_xor, s31, overflow);
     assign isLessThan = lt_xor;
 
-    // ------------------------------------------------------------
-    // Select final result based on opcode wires
-    // Ternary cond is a single wire each time which is allowed
-    // ------------------------------------------------------------
+    // % Final result based on opcode wires
     wire [31:0] add_res = sum;       // when op_add
     wire [31:0] sub_res = sum;       // when op_sub
 
@@ -215,9 +152,7 @@ module alu(data_operandA, data_operandB, ctrl_ALUopcode, ctrl_shiftamt, data_res
 
 endmodule
 
-// ------------------------------------------------------------
-// 4 bit ripple carry adder
-// ------------------------------------------------------------
+// % ripple carry adder 4 bit
 module rca4(
     input  [3:0] a,
     input  [3:0] b,
@@ -232,25 +167,18 @@ module rca4(
     fa fa3(.a(a[3]), .b(b[3]), .cin(c3),  .s(sum[3]), .cout(cout));
 endmodule
 
-// ------------------------------------------------------------
-// 1 bit full adder using gates
-// ------------------------------------------------------------
+// % 1 bit full adder
 module fa(
     input  a, b, cin,
     output s, cout
 );
     wire axb, ab, ac, bc;
-    xor x1(axb, a, b);
-    xor x2(s,   axb, cin);
-    and a1(ab, a, b);
-    and a2(ac, a, cin);
-    and a3(bc, b, cin);
+    xor x1(axb, a, b); xor x2(s,   axb, cin);
+    and a1(ab, a, b); and a2(ac, a, cin); and a3(bc, b, cin);
     or  o1(cout, ab, ac, bc);
 endmodule
 
-// ------------------------------------------------------------
-// OR reduce 32 bits using only gate primitives
-// ------------------------------------------------------------
+// % OR reduce 32 bits using only gate primitives
 module reduce_or32(
     input  [31:0] in,
     output        out
@@ -283,10 +211,8 @@ module reduce_or32(
     or g_out(out, l4[0], l4[1]);
 endmodule
 
-// ------------------------------------------------------------
-// Logical left shift barrel shifter 32 bit
-// Five staged by 1,2,4,8,16
-// ------------------------------------------------------------
+
+// % Logical left shift barrel shifter 32 bit
 module barrel_sll32(
     input  [31:0] in,
     input  [4:0]  sa,
@@ -357,10 +283,8 @@ module barrel_sll32(
     assign out = s5;
 endmodule
 
-// ------------------------------------------------------------
-// Arithmetic right shift barrel shifter 32 bit
+// % Arithmetic right shift barrel shifter 32 bit
 // Sign extends from in[31]
-// ------------------------------------------------------------
 module barrel_sra32(
     input  [31:0] in,
     input  [4:0]  sa,
