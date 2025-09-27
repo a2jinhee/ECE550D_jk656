@@ -231,8 +231,6 @@ module barrel_sll32(
             end
         end
     endgenerate
-
-    // shift by 2 when sa[1] is 1
     genvar i2;
     generate
         for (i2 = 0; i2 < 32; i2 = i2 + 1) begin: SLL2
@@ -243,8 +241,6 @@ module barrel_sll32(
             end
         end
     endgenerate
-
-    // shift by 4
     genvar i3;
     generate
         for (i3 = 0; i3 < 32; i3 = i3 + 1) begin: SLL4
@@ -255,8 +251,6 @@ module barrel_sll32(
             end
         end
     endgenerate
-
-    // shift by 8
     genvar i4;
     generate
         for (i4 = 0; i4 < 32; i4 = i4 + 1) begin: SLL8
@@ -267,8 +261,6 @@ module barrel_sll32(
             end
         end
     endgenerate
-
-    // shift by 16
     genvar i5;
     generate
         for (i5 = 0; i5 < 32; i5 = i5 + 1) begin: SLL16
@@ -304,8 +296,6 @@ module barrel_sra32(
             end
         end
     endgenerate
-
-    // shift by 2
     genvar j2;
     generate
         for (j2 = 0; j2 < 32; j2 = j2 + 1) begin: SRA2
@@ -316,8 +306,6 @@ module barrel_sra32(
             end
         end
     endgenerate
-
-    // shift by 4
     genvar j3;
     generate
         for (j3 = 0; j3 < 32; j3 = j3 + 1) begin: SRA4
@@ -328,8 +316,6 @@ module barrel_sra32(
             end
         end
     endgenerate
-
-    // shift by 8
     genvar j4;
     generate
         for (j4 = 0; j4 < 32; j4 = j4 + 1) begin: SRA8
@@ -340,8 +326,6 @@ module barrel_sra32(
             end
         end
     endgenerate
-
-    // shift by 16
     genvar j5;
     generate
         for (j5 = 0; j5 < 32; j5 = j5 + 1) begin: SRA16
