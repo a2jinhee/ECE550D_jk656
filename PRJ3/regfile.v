@@ -61,7 +61,7 @@ module regfile (
                 for (b = 0; b < 32; b = b + 1) begin: GEN_BITS
                     // Instantiation of your DFFE primitive
                     // Adjust port names here if your dffe.v uses different ones
-                    dffe u_dffe (
+                    dffe_ref u_dffe (
                         .q   (q[i][b]),
                         .d   (data_writeReg[b]),
                         .clk (clock),
