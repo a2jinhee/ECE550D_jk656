@@ -38,7 +38,7 @@ module regfile (
             assign eq_b = &(~(ctrl_readRegB ^ IDX));
 
             // write select one hot (r0 never writes) // read selects
-            assign wr_sel[i] = (i == 0) ? 1'b0 : (ctrl_writeEnable & eq_w);
+            assign wr_sel[i] = ctrl_writeEnable & eq_w;
             assign rdA_sel[i] = eq_a;
             assign rdB_sel[i] = eq_b;
 
