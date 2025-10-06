@@ -16,21 +16,18 @@ module regfile (
    // storage array outputs from each register
     wire [31:0] q [31:0];
 
-    // reg 0 must always read as 0 
+    // one hot
     assign q[0] = 32'b0;
-
-    // one hot write enables for regs 0..31
-    wire [31:0] wr_sel;
-
-    // read selects for A and B
-    wire [31:0] rdA_sel;
-    wire [31:0] rdB_sel;
+    wire [31:0] wr_sel, rdA_sel, rdB_sel;
+    // x0 never writes, decode reads for index zero
+    assign wr_sel[0]  = 1'b0;
+    assign rdA_sel[0] = &(~(ctrl_readRegA ^ 5'd0));
+    assign rdB_sel[0] = &(~(ctrl_readRegB ^ 5'd0));
 
     // decode and register build
     genvar i, b;
     generate
-        for (i = 0; i < 32; i = i + 1) begin: GEN_REGS
-            
+        for (i = 1; i < 32; i = i + 1) begin: GEN_REGS
             localparam [4:0] IDX = i[4:0];
 
             wire eq_w; // eq_w = 1 when ctrl_writeReg == IDX
@@ -49,7 +46,7 @@ module regfile (
                 // 32 bit reg made of 32 DFFE cells
                 for (b = 0; b < 32; b = b + 1) begin: GEN_BITS
                     // my DFFE 
-                    dffe_ref u_dffe (.q (q[i][b]), .d (data_writeReg[b]), .clk (clock), .en (wr_sel[i]), .clr (ctrl_reset));
+                    dffe u_dffe (.q (q[i][b]), .d (data_writeReg[b]), .clk (clock), .en (wr_sel[i]), .clr (ctrl_reset));
                 end
             end
         end
