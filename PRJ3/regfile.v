@@ -46,7 +46,7 @@ module regfile (
                 // 32 bit reg made of 32 DFFE cells
                 for (b = 0; b < 32; b = b + 1) begin: GEN_BITS
                     // my DFFE 
-                    dffe u_dffe (.q (q[i][b]), .d (data_writeReg[b]), .clk (clock), .en (wr_sel[i]), .clr (ctrl_reset));
+                    dffe_ref u_dffe (.q (q[i][b]), .d (data_writeReg[b]), .clk (clock), .en (wr_sel[i]), .clr (ctrl_reset));
                 end
             end
         end
