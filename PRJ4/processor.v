@@ -105,7 +105,7 @@ module processor(
     genvar i;
     generate
         for(i = 0; i < 32; i = i + 1) begin: pc_bits
-            dffe pc_reg(.q(pc_q[i]), .d(pc_d[i]), .clk(clock), .en(1'b1), .clr(reset));
+            dffe_ref pc_reg(.q(pc_q[i]), .d(pc_d[i]), .clk(clock), .en(1'b1), .clr(reset));
         end
     endgenerate
 
