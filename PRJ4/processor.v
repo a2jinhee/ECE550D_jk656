@@ -121,7 +121,7 @@ module processor(
     wire [31:0] imm32 = {{15{imm17[16]}}, imm17};
 
     // % Control signal generation
-    // opcode decodes
+    // * opcode decodes
     wire [4:0] op_eq_R     = ~(opcode ^ 5'b00000);
     wire [4:0] op_eq_ADDI  = ~(opcode ^ 5'b00101);
     wire [4:0] op_eq_SW    = ~(opcode ^ 5'b00111);
@@ -132,7 +132,7 @@ module processor(
     wire isSW   = &op_eq_SW;
     wire isLW   = &op_eq_LW;
 
-    // func decodes for R type
+    // * func decodes for R type
     wire [4:0] fn_eq_ADD = ~(func ^ 5'b00000);
     wire [4:0] fn_eq_SUB = ~(func ^ 5'b00001);
     wire [4:0] fn_eq_AND = ~(func ^ 5'b00010);
@@ -159,18 +159,18 @@ module processor(
     wire [31:0] aluA = data_readRegA;
     wire [31:0] aluB = (isR) ? data_readRegB : (isADDI | isSW | isLW) ? imm32 : 32'b0;
     wire [4:0] aluOp = r_add ? 5'b00000 :
-                       r_sub ? 5'b00001 :
-                       r_and ? 5'b00010 :
-                       r_or  ? 5'b00011 :
-                       r_sll ? 5'b00100 :
-                       r_sra ? 5'b00101 :
-                       5'b00000;
+                        r_sub ? 5'b00001 :
+                        r_and ? 5'b00010 :
+                        r_or  ? 5'b00011 :
+                        r_sll ? 5'b00100 :
+                        r_sra ? 5'b00101 :
+                        5'b00000;
     wire [31:0] aluOut;
     wire aluNe, aluLt, aluOv;
 
     alu exec_alu(.data_operandA(aluA), .data_operandB(aluB), .ctrl_ALUopcode(aluOp),
-                 .ctrl_shiftamt(shamt), .data_result(aluOut), .isNotEqual(aluNe),
-                 .isLessThan(aluLt), .overflow(aluOv));
+                        .ctrl_shiftamt(shamt), .data_result(aluOut), .isNotEqual(aluNe),
+                        .isLessThan(aluLt), .overflow(aluOv));
 
     assign address_dmem = aluOut[11:0];
     assign data = data_readRegB;
@@ -189,7 +189,7 @@ module processor(
     wire [4:0] wregFinal = willWriteRS ? 5'd30 : wbReg;
     wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
 
-    // Write enable control
+    // * Write enable control
     wire nz_wreg = |wregFinal;
     assign ctrl_writeEnable = weFinal & nz_wreg;
 

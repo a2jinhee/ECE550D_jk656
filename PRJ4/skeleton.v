@@ -22,7 +22,7 @@ module skeleton(clock, reset, imem_clock, dmem_clock, processor_clock, regfile_c
     */
     output imem_clock, dmem_clock, processor_clock, regfile_clock;
     
-    // MY CODE
+    // * MY CODE
     // Simple pass through clocks
     assign imem_clock      = clock;
     assign dmem_clock      = clock;
@@ -47,13 +47,7 @@ module skeleton(clock, reset, imem_clock, dmem_clock, processor_clock, regfile_c
     wire [31:0] data;
     wire wren;
     wire [31:0] q_dmem;
-    // dmem my_dmem(
-    //     .address    (/* 12-bit wire */),       // address of data
-    //     .clock      (dmem_clock),                  // may need to invert the clock
-    //     .data	    (/* 32-bit data in */),    // data you want to write
-    //     .wren	    (/* 1-bit signal */),      // write enable
-    //     .q          (/* 32-bit data out */)    // data from dmem
-    // );
+    // * MY CODE
     dmem my_dmem(
         .address    (address_dmem),       // address of data
         .clock      (dmem_clock),                  // may need to invert the clock
