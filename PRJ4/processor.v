@@ -127,17 +127,20 @@ module processor(
     // ============================
     // Control Signals
     // ============================
-    wire isR = (opcode == 5'b00000);
-    wire isADDI = (opcode == 5'b00101);
-    wire isSW = (opcode == 5'b00111);
-    wire isLW = (opcode == 5'b01000);
+    // Decode opcode using bitwise equality (XNOR + reduction AND)
+    wire isR    = &~(opcode ^ 5'b00000);
+    wire isADDI = &~(opcode ^ 5'b00101);
+    wire isSW   = &~(opcode ^ 5'b00111);
+    wire isLW   = &~(opcode ^ 5'b01000);
 
-    wire fADD = (func == 5'b00000);
-    wire fSUB = (func == 5'b00001);
-    wire fAND = (func == 5'b00010);
-    wire fOR  = (func == 5'b00011);
-    wire fSLL = (func == 5'b00100);
-    wire fSRA = (func == 5'b00101);
+    // Decode func field for R-type instructions
+    wire fADD = &~(func ^ 5'b00000);
+    wire fSUB = &~(func ^ 5'b00001);
+    wire fAND = &~(func ^ 5'b00010);
+    wire fOR  = &~(func ^ 5'b00011);
+    wire fSLL = &~(func ^ 5'b00100);
+    wire fSRA = &~(func ^ 5'b00101);
+
 
     wire r_add = isR & fADD;
     wire r_sub = isR & fSUB;
@@ -187,7 +190,11 @@ module processor(
     wire [4:0] wregFinal = willWriteRS ? 5'd30 : wbReg;
     wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
 
-    assign ctrl_writeEnable = weFinal & (wregFinal != 5'd0);
+    // Write enable control
+    wire nz_wreg;
+    assign nz_wreg = |wregFinal;                 // check if wregFinal != 0
+    assign ctrl_writeEnable = weFinal & nz_wreg;
+    
     assign ctrl_writeReg = wregFinal;
     assign data_writeReg = wdatFinal;
 
