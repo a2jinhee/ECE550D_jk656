@@ -104,13 +104,11 @@ module processor_tb;
     end
   end
 
-  // allow final writes to settle (e.g., lw delayed writeback)
-  repeat (4) @(posedge clock_50mhz);
   // Optional live view of read ports to help debug hazards and bypass
-  // print all 32 registers
-  $display("==== Final regfile snapshot ====");
-  for (i = 0; i < 32; i = i + 1) begin
-    $display("r%0d = 0x%08h (%0d)", i, rf_shadow[i], rf_shadow[i]);
+  always @(posedge regfile_clock) begin
+    $strobe("[RF] read A r%0d=0x%08h  read B r%0d=0x%08h",
+            rf_raddr_a, rf_rdata_a, rf_raddr_b, rf_rdata_b);
   end
+  
 
 endmodule
