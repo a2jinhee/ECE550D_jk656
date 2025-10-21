@@ -24,10 +24,21 @@ module skeleton(clock, reset, imem_clock, dmem_clock, processor_clock, regfile_c
     
     // * MY CODE
     // Simple pass through clocks
-    assign imem_clock      = clock;
+    assign imem_clock      = ~clock;
     assign dmem_clock      = clock;
-    assign processor_clock = clock;
-    assign regfile_clock   = clock;
+//    clk_div_4 clockdivider1(clock, processor_clock, reset);
+//    clk_div_4 clockdivider2(clock, regfile_clock, reset);
+	clk_div_4 clockdivider1(
+		 .clk_in (clock),
+		 .reset  (reset),
+		 .clk_out(processor_clock)
+	);
+
+	clk_div_4 clockdivider2(
+		 .clk_in (clock),
+		 .reset  (reset),
+		 .clk_out(regfile_clock)
+	);
 
     /** IMEM **/
     // Figure out how to generate a Quartus syncram component and commit the generated verilog file.
@@ -100,4 +111,24 @@ module skeleton(clock, reset, imem_clock, dmem_clock, processor_clock, regfile_c
         data_readRegB                   // I: Data from port B of regfile
     );
 
+endmodule
+
+
+module clk_div_4 (
+    input  wire clk_in,
+    input  wire reset,
+    output reg  clk_out
+);
+    reg [1:0] count;
+
+    always @(posedge clk_in or posedge reset) begin
+        if (reset) begin
+            count   <= 2'b00;
+            clk_out <= 1'b0;
+        end else begin
+            count <= count + 2'b01;
+            if (count == 2'b11)
+                clk_out <= ~clk_out;
+        end
+    end
 endmodule

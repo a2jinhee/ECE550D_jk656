@@ -11,7 +11,7 @@ module processor_tb;
   wire processor_clock;
   wire regfile_clock;
 
-  integer max_cycles     = 100;
+  integer max_cycles     = 300;
   integer reset_cycles   = 5;
   integer heartbeat_step = 100;
   integer cycle;
