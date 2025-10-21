@@ -11,7 +11,7 @@ module processor_tb;
   wire processor_clock;
   wire regfile_clock;
 
-  integer max_cycles     = 2000;
+  integer max_cycles     = 100;
   integer reset_cycles   = 5;
   integer heartbeat_step = 100;
   integer cycle;
@@ -104,10 +104,13 @@ module processor_tb;
     end
   end
 
+  // allow final writes to settle (e.g., lw delayed writeback)
+  repeat (4) @(posedge clock_50mhz);
   // Optional live view of read ports to help debug hazards and bypass
-  always @(posedge regfile_clock) begin
-    $strobe("[RF] read A r%0d=0x%08h  read B r%0d=0x%08h",
-            rf_raddr_a, rf_rdata_a, rf_raddr_b, rf_rdata_b);
+  // print all 32 registers
+  $display("==== Final regfile snapshot ====");
+  for (i = 0; i < 32; i = i + 1) begin
+    $display("r%0d = 0x%08h (%0d)", i, rf_shadow[i], rf_shadow[i]);
   end
 
 endmodule
