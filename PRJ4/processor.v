@@ -91,9 +91,7 @@ module processor(
     input [31:0] data_readRegA, data_readRegB;
 
     /* YOUR CODE STARTS HERE */
-    // ============================
-    // Program Counter
-    // ============================
+    // % Program counter (PC) and instruction fetch
     wire [31:0] pc_q, pc_plus_one, pc_d;
     wire [31:0] const_one = 32'd1;
 
@@ -111,9 +109,7 @@ module processor(
 
     assign address_imem = pc_q[11:0];
 
-    // ============================
-    // Instruction Decode
-    // ============================
+    // % Instruction decode: extract fields
     wire [31:0] instr = q_imem;
     wire [4:0] opcode = instr[31:27];
     wire [4:0] rd = instr[26:22];
@@ -124,37 +120,42 @@ module processor(
     wire [16:0] imm17 = instr[16:0];
     wire [31:0] imm32 = {{15{imm17[16]}}, imm17};
 
-    // ============================
-    // Control Signals
-    // ============================
-    // Decode opcode using bitwise equality (XNOR + reduction AND)
-    wire isR    = &~(opcode ^ 5'b00000);
-    wire isADDI = &~(opcode ^ 5'b00101);
-    wire isSW   = &~(opcode ^ 5'b00111);
-    wire isLW   = &~(opcode ^ 5'b01000);
+    // % Control signal generation
+    // opcode decodes
+    wire [4:0] op_eq_R     = ~(opcode ^ 5'b00000);
+    wire [4:0] op_eq_ADDI  = ~(opcode ^ 5'b00101);
+    wire [4:0] op_eq_SW    = ~(opcode ^ 5'b00111);
+    wire [4:0] op_eq_LW    = ~(opcode ^ 5'b01000);
 
-    // Decode func field for R-type instructions
-    wire fADD = &~(func ^ 5'b00000);
-    wire fSUB = &~(func ^ 5'b00001);
-    wire fAND = &~(func ^ 5'b00010);
-    wire fOR  = &~(func ^ 5'b00011);
-    wire fSLL = &~(func ^ 5'b00100);
-    wire fSRA = &~(func ^ 5'b00101);
+    wire isR    = &op_eq_R;
+    wire isADDI = &op_eq_ADDI;
+    wire isSW   = &op_eq_SW;
+    wire isLW   = &op_eq_LW;
 
+    // func decodes for R type
+    wire [4:0] fn_eq_ADD = ~(func ^ 5'b00000);
+    wire [4:0] fn_eq_SUB = ~(func ^ 5'b00001);
+    wire [4:0] fn_eq_AND = ~(func ^ 5'b00010);
+    wire [4:0] fn_eq_OR  = ~(func ^ 5'b00011);
+    wire [4:0] fn_eq_SLL = ~(func ^ 5'b00100);
+    wire [4:0] fn_eq_SRA = ~(func ^ 5'b00101);
 
+    wire fADD = &fn_eq_ADD;
+    wire fSUB = &fn_eq_SUB;
+    wire fAND = &fn_eq_AND;
+    wire fOR  = &fn_eq_OR;
+    wire fSLL = &fn_eq_SLL;
+    wire fSRA = &fn_eq_SRA;
     wire r_add = isR & fADD;
     wire r_sub = isR & fSUB;
     wire r_and = isR & fAND;
     wire r_or  = isR & fOR;
     wire r_sll = isR & fSLL;
     wire r_sra = isR & fSRA;
-
     assign ctrl_readRegA = rs;
     assign ctrl_readRegB = isSW ? rd : rt;
 
-    // ============================
-    // Execute
-    // ============================
+    // % Execute
     wire [31:0] aluA = data_readRegA;
     wire [31:0] aluB = (isR) ? data_readRegB : (isADDI | isSW | isLW) ? imm32 : 32'b0;
     wire [4:0] aluOp = r_add ? 5'b00000 :
@@ -175,9 +176,7 @@ module processor(
     assign data = data_readRegB;
     assign wren = isSW;
 
-    // ============================
-    // Writeback
-    // ============================
+    // % Write back
     wire ovAdd  = r_add & aluOv;
     wire ovAddi = isADDI & aluOv;
     wire ovSub  = r_sub & aluOv;
@@ -191,10 +190,9 @@ module processor(
     wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
 
     // Write enable control
-    wire nz_wreg;
-    assign nz_wreg = |wregFinal;                 // check if wregFinal != 0
+    wire nz_wreg = |wregFinal;
     assign ctrl_writeEnable = weFinal & nz_wreg;
-    
+
     assign ctrl_writeReg = wregFinal;
     assign data_writeReg = wdatFinal;
 
