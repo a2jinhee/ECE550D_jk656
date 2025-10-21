@@ -156,6 +156,22 @@ module processor(
     assign ctrl_readRegB = isSW ? rd : rt;
 
     // % Execute
+    // LW one cycle capture
+    // Capture that a load was issued and remember its destination register
+    wire lw_pending_q;
+    wire lw_pending_d = isLW;
+    dffe_ref lw_pending_ff(.q(lw_pending_q), .d(lw_pending_d), .clk(clock), .en(1'b1), .clr(reset));
+
+    wire [4:0] lw_dest_q;
+    wire [4:0] lw_dest_d = rd;
+    genvar gi_lw;
+    generate
+        for (gi_lw = 0; gi_lw < 5; gi_lw = gi_lw + 1) begin: lw_dest_regs
+            dffe_ref lw_dest_ff(.q(lw_dest_q[gi_lw]), .d(lw_dest_d[gi_lw]),
+                                .clk(clock), .en(isLW), .clr(reset));
+        end
+    endgenerate
+    
     wire [31:0] aluA = data_readRegA;
     wire [31:0] aluB = (isR) ? data_readRegB : (isADDI | isSW | isLW) ? imm32 : 32'b0;
     wire [4:0] aluOp = r_add ? 5'b00000 :
@@ -183,17 +199,20 @@ module processor(
     wire [31:0] rstatVal = ovAdd ? 32'd1 : ovAddi ? 32'd2 : ovSub ? 32'd3 : 32'd0;
     wire willWriteRS = ovAdd | ovAddi | ovSub;
 
-    wire [31:0] wbVal = isLW ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
-    wire [4:0] wbReg = (isR | isADDI | isLW) ? rd : 5'd0;
-    wire weFinal = willWriteRS | (isR | isADDI | isLW);
-    wire [4:0] wregFinal = willWriteRS ? 5'd30 : wbReg;
+    // When lw_pending_q is high, q_dmem holds the loaded word for the prior LW
+    wire mem_wb_sel = lw_pending_q;
+    wire [31:0] wbVal = mem_wb_sel ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
+    wire [4:0]  wbReg = mem_wb_sel ? lw_dest_q : (isR | isADDI) ? rd : 5'd0;
+    wire        weFinal = willWriteRS | (isR | isADDI) | mem_wb_sel;
+
+    wire [4:0]  wregFinal = willWriteRS ? 5'd30 : wbReg;
     wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
 
-    // * Write enable control
+    // Write enable gating so r0 is never written
     wire nz_wreg = |wregFinal;
     assign ctrl_writeEnable = weFinal & nz_wreg;
 
-    assign ctrl_writeReg = wregFinal;
-    assign data_writeReg = wdatFinal;
+    assign ctrl_writeReg    = wregFinal;
+    assign data_writeReg    = wdatFinal;
 
 endmodule
