@@ -122,13 +122,13 @@ module clk_div_4 (
     wire q0, q1;
     wire d0, d1;
 
-    // Toggle stage 0 every clock
-    // Toggle stage 1 only on every other clock
-    assign d0 = q0 ^ 1'b1;
-    assign d1 = q1 ^ q0;
+    // stage 0 toggles on clk_in
+    not inv0(d0, q0);
+    dff ff0(.q(q0), .d(d0), .clk(clk_in), .clr(~reset));
 
-    dffe_ref dff0(.q(q0), .d(d0), .clk(clk_in), .en(1'b1), .clr(~reset));
-    dffe_ref dff1(.q(q1), .d(d1), .clk(clk_in), .en(1'b1), .clr(~reset));
+    // stage 1 toggles on q0
+    not inv1(d1, q1);
+    dff ff1(.q(q1), .d(d1), .clk(q0), .clr(~reset));
 
     assign clk_out = q1;
 endmodule
