@@ -89,6 +89,26 @@ module processor_tb;
     end
     $finish;
   end
+
+  // Update shadow file on regfile write
+  always @(posedge regfile_clock) begin
+    if (rf_we) begin
+      // ignore writes to r0 per spec
+      if (rf_waddr != 5'd0) begin
+        rf_shadow[rf_waddr] <= rf_wdata;
+        if (rf_waddr == 5'd30)
+          $display("[RF] rstatus write 0x%08h at time %0t", rf_wdata, $time);
+        else
+          $display("[RF] write r%0d <= 0x%08h at time %0t", rf_waddr, rf_wdata, $time);
+      end
+    end
+  end
+
+  // Optional live view of read ports to help debug hazards and bypass
+  always @(posedge regfile_clock) begin
+    $strobe("[RF] read A r%0d=0x%08h  read B r%0d=0x%08h",
+            rf_raddr_a, rf_rdata_a, rf_raddr_b, rf_rdata_b);
+  end
   
 
 endmodule
