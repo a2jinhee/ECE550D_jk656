@@ -117,18 +117,18 @@ endmodule
 module clk_div_4 (
     input  wire clk_in,
     input  wire reset,
-    output wire clk_out
+    output reg  clk_out
 );
-    wire q0, q1;
-    wire d0, d1;
+    reg [1:0] count;
 
-    // stage 0 toggles on clk_in
-    not inv0(d0, q0);
-    dff ff0(.q(q0), .d(d0), .clk(clk_in), .clr(~reset));
-
-    // stage 1 toggles on q0
-    not inv1(d1, q1);
-    dff ff1(.q(q1), .d(d1), .clk(q0), .clr(~reset));
-
-    assign clk_out = q1;
+    always @(posedge clk_in or posedge reset) begin
+        if (reset) begin
+            count   <= 2'b00;
+            clk_out <= 1'b0;
+        end else begin
+            count <= count + 2'b01;
+            if (count == 2'b11)
+                clk_out <= ~clk_out;
+        end
+    end
 endmodule
