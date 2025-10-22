@@ -117,18 +117,18 @@ endmodule
 module clk_div_4 (
     input  wire clk_in,
     input  wire reset,
-    output reg  clk_out
+    output wire clk_out
 );
-    reg [1:0] count;
+    wire q0, q1;
+    wire d0, d1;
 
-    always @(posedge clk_in or posedge reset) begin
-        if (reset) begin
-            count   <= 2'b00;
-            clk_out <= 1'b0;
-        end else begin
-            count <= count + 2'b01;
-            if (count == 2'b11)
-                clk_out <= ~clk_out;
-        end
-    end
+    // Toggle stage 0 every clock
+    // Toggle stage 1 only on every other clock
+    assign d0 = q0 ^ 1'b1;
+    assign d1 = q1 ^ q0;
+
+    dffe_ref dff0(.q(q0), .d(d0), .clk(clk_in), .ena(1'b1), .clrn(~reset));
+    dffe_ref dff1(.q(q1), .d(d1), .clk(clk_in), .ena(1'b1), .clrn(~reset));
+
+    assign clk_out = q1;
 endmodule
