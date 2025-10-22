@@ -127,8 +127,8 @@ module clk_div_4 (
     assign d0 = q0 ^ 1'b1;
     assign d1 = q1 ^ q0;
 
-    dffe_ref dff0(.q(q0), .d(d0), .clk(clk_in), .ena(1'b1), .clrn(~reset));
-    dffe_ref dff1(.q(q1), .d(d1), .clk(clk_in), .ena(1'b1), .clrn(~reset));
+    dffe_ref dff0(.q(q0), .d(d0), .clk(clk_in), .en(1'b1), .clr(~reset));
+    dffe_ref dff1(.q(q1), .d(d1), .clk(clk_in), .en(1'b1), .clr(~reset));
 
     assign clk_out = q1;
 endmodule
