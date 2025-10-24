@@ -1,47 +1,63 @@
-# jump_test.s
+# Minimal jump and branch test
 
-nop                         # 00
+start:
+    addi $1,  $0, 1        # r1 = 1
+    addi $2,  $0, 2        # r2 = 2
+    addi $5,  $0, 0        # r5 = score counter
 
-# setup
-addi $1, $0, 5              # 01  r1 = 5
-addi $2, $0, 3              # 02  r2 = 3
-add  $3, $1, $2             # 03  r3 = 8
+    # j T  absolute jump
+    j L_j_ok
+    addi $6,  $0, 111      # should be skipped if j works
 
-# j to an absolute address
-j    6                      # 04  go to 06
-addi $31, $0, 0             # 05  skipped
+L_j_ok:
+    addi $5,  $5, 1        # score += 1  j worked
 
-addi $4, $0, 1              # 06  r4 = 1
+    # jal T  then jr $ra to return
+    jal L_sub               # $r31 = PC + 1, jump to L_sub
+    addi $7,  $0, 777       # runs only after jr $31 returns
 
-# jal to absolute target and check link
-jal  10                     # 07  r31 gets 8 then jump to 10
-addi $31, $31, 1            # 08  skipped
-nop                         # 09  filler
+    # bne not taken
+    bne  $1,  $1, 2         # not taken, next two lines run
+    addi $16, $0, 123       # executes
+    j    L_after_bne1       # skip the next line
+    addi $9,  $0, 999       # should be skipped
 
-add  $5, $31, $0            # 10  r5 = r31 = 8
+L_after_bne1:
+    # bne taken
+    bne  $1,  $2, 1         # taken, skip next addi
+    addi $10, $0, 555       # skipped if branch works
+    addi $5,  $5, 1         # score += 1
 
-# bne taken
-bne  $1, $2, 2              # 11  5 != 3 so to 14
-addi $6, $0, 111            # 12  skipped when branch taken
-addi $6, $0, 222            # 13  r6 = 222
+    # blt taken
+    blt  $1,  $2, 1         # taken, skip next addi
+    addi $11, $0, 444       # skipped if blt works
+    addi $5,  $5, 1         # score += 1
 
-# blt taken
-blt  $2, $1, 2              # 14  3 < 5 so to 17
-addi $7, $0, 333            # 15  skipped when branch taken
-addi $7, $0, 444            # 16  r7 = 444
+    # blt not taken
+    blt  $2,  $1, 1         # not taken, do not skip next addi
+    addi $12, $0, 333       # executes
+    addi $5,  $5, 1         # score += 1
 
-# jr using register target
-addi $8, $0, 20             # 17  r8 = 20
-jr   $8                     # 18  to 20
-addi $9, $0, 555            # 19  skipped by jr
+    # setx T and bex T
+    setx L_bex              # rstatus = address of L_bex  nonzero
+    bex  L_bex              # taken because rstatus != 0
+    addi $13, $0, 222       # should be skipped
+L_bex:
+    addi $5,  $5, 1         # score += 1
 
-addi $9, $0, 666            # 20  r9 = 666
+    setx 0                  # rstatus = 0
+    bex  L_should_not       # not taken because rstatus == 0
+    addi $14, $0, 111       # executes
+L_should_not:
 
-# setx then bex taken
-setx 24                     # 21  r30 = 24
-bex  24                     # 22  r30 != 0 so to 24
-addi $10, $0, 777           # 23  skipped by bex
+    # final absolute jump to end
+    j    L_end
+    addi $15, $0, 999       # should be skipped
 
-# end loop
-j    24                     # 24  stay here
-nop                         # 25
+L_end:
+    addi $0,  $0, 0         # nop
+
+# Subroutine for jal and jr
+L_sub:
+    addi $18, $0, 42        # mark that subroutine ran
+    jr   $31                # return to PC saved by jal

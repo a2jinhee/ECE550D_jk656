@@ -50,7 +50,7 @@ module processor(
                .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one), .isNotEqual(), .isLessThan(), .overflow());
 
     // Next PC default
-    assign pc_d = pc_plus_one;
+    // assign pc_d = pc_plus_one;
 
     genvar i;
     generate
