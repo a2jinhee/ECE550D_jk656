@@ -29,12 +29,12 @@ addi $11, $0, 777       # 21, EXECUTE
 addi $5,  $5, 1         # 22, r5 = 5  (blt not taken works)
 # ----- 5. Test setx / bex -----
 setx  30                # 23, set rstatus=30
-bex   26                # 24, branch to 27 if rstatus=nonzero
+bex   26                # 24, branch to 26 if rstatus=nonzero
 addi  $12, $0, 444      # 25, SKIP
 addi  $5,  $5, 1        # 26, r5 = 6  (bex worked)
 setx  0                 # 27, clear rstatus = 0
-bex   30                # 28, not taken, skip to end
-addi  $13, $0, 555      # 29, SKIP
+bex   30                # 28, not taken if rstatus=0
+addi  $13, $0, 555      # 29, EXECUTE
 addi  $5,  $5, 1        # 30, r5 = 7  (bex not taken works)
 # ----- 6. Final jump to end -----
 j 33                    # 31, absolute jump to end
@@ -43,6 +43,6 @@ addi $0,  $0, 0         # 33, NOP
 
 # ==========================================================
 # Expected register summary after simulation:
-# r1=1  r2=2  r5=7  r7=777  r8=222  r11=777  r18=42
+# r1=1  r2=2  r5=7  r7=777  r8=222  r11=777 r13=555 r18=42  r31=7
 # rstatus=0  all others 0
 # ==========================================================
