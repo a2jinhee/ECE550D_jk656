@@ -98,7 +98,6 @@ module processor(
     alu alu_pc(.data_operandA(pc_q), .data_operandB(const_one), .ctrl_ALUopcode(5'b00000),
                .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one), .isNotEqual(), .isLessThan(), .overflow());
 
-    // Next PC default
     assign pc_d = pc_plus_one;
 
     genvar i;
@@ -121,10 +120,6 @@ module processor(
     wire [16:0] imm17 = instr[16:0];
     wire [31:0] imm32 = {{15{imm17[16]}}, imm17};
 
-    // JI target
-    wire [26:0] T = instr[26:0];
-    wire [31:0] T32 = {5'b00000, T};
-
     // % Control signal generation
     // * opcode decodes
     wire [4:0] op_eq_R     = ~(opcode ^ 5'b00000);
@@ -132,27 +127,10 @@ module processor(
     wire [4:0] op_eq_SW    = ~(opcode ^ 5'b00111);
     wire [4:0] op_eq_LW    = ~(opcode ^ 5'b01000);
 
-    // new opcodes
-    wire [4:0] op_eq_J     = ~(opcode ^ 5'b00001);
-    wire [4:0] op_eq_BNE   = ~(opcode ^ 5'b00010);
-    wire [4:0] op_eq_JAL   = ~(opcode ^ 5'b00011);
-    wire [4:0] op_eq_JR    = ~(opcode ^ 5'b00100);
-    wire [4:0] op_eq_BLT   = ~(opcode ^ 5'b00110);
-    wire [4:0] op_eq_SETX  = ~(opcode ^ 5'b10101);
-    wire [4:0] op_eq_BEX   = ~(opcode ^ 5'b10110);
-
     wire isR    = &op_eq_R;
     wire isADDI = &op_eq_ADDI;
     wire isSW   = &op_eq_SW;
     wire isLW   = &op_eq_LW;
-
-    wire isJ    = &op_eq_J;
-    wire isBNE  = &op_eq_BNE;
-    wire isJAL  = &op_eq_JAL;
-    wire isJR   = &op_eq_JR;
-    wire isBLT  = &op_eq_BLT;
-    wire isSETX = &op_eq_SETX;
-    wire isBEX  = &op_eq_BEX;
 
     // * func decodes for R type
     wire [4:0] fn_eq_ADD = ~(func ^ 5'b00000);
@@ -174,21 +152,8 @@ module processor(
     wire r_or  = isR & fOR;
     wire r_sll = isR & fSLL;
     wire r_sra = isR & fSRA;
-
-    // Regfile read port selects
-    // A port
-    // branch compares use rd vs rs
-    // jr uses rd as source for PC
-    // bex needs rstatus in A
-    assign ctrl_readRegA =
-          isBEX ? 5'd30 :
-          isJR  ? rd :
-         (isBNE | isBLT) ? rd : rs;
-
-    // B port
-    assign ctrl_readRegB =
-          isSW ? rd :
-         (isBNE | isBLT) ? rs : rt;
+    assign ctrl_readRegA = rs;
+    assign ctrl_readRegB = isSW ? rd : rt;
 
     // % Execute
     wire [31:0] aluA = data_readRegA;
@@ -207,54 +172,9 @@ module processor(
                         .ctrl_shiftamt(shamt), .data_result(aluOut), .isNotEqual(aluNe),
                         .isLessThan(aluLt), .overflow(aluOv));
 
-    // dedicated compare ALU for branch flags on rd vs rs
-    wire cmpNe, cmpLt;
-    alu cmp_alu(.data_operandA(data_readRegA), .data_operandB(data_readRegB),
-                .ctrl_ALUopcode(5'b00001), .ctrl_shiftamt(5'b00000),
-                .data_result(), .isNotEqual(cmpNe), .isLessThan(cmpLt), .overflow());
-
-    // branch target PC + 1 + N
-    wire [31:0] pc_plus_imm;
-    alu alu_branch(.data_operandA(pc_plus_one), .data_operandB(imm32),
-                   .ctrl_ALUopcode(5'b00000), .ctrl_shiftamt(5'b00000),
-                   .data_result(pc_plus_imm), .isNotEqual(), .isLessThan(), .overflow());
-
-    // Data memory interface
     assign address_dmem = aluOut[11:0];
     assign data = data_readRegB;
     assign wren = isSW;
-
-    // % Next PC select
-    wire take_bne = isBNE & cmpNe;
-    wire take_blt = isBLT & cmpLt;
-    wire nz_rstatus = |data_readRegA; // valid since A reads rstatus during bex
-    wire take_bex = isBEX & nz_rstatus;
-
-    wire [31:0] pc_seq = pc_plus_one;
-    wire [31:0] pc_br  = pc_plus_imm;
-    wire [31:0] pc_jmp = T32;
-    wire [31:0] pc_jr  = data_readRegA;
-
-    wire do_branch = take_bne | take_blt;
-    wire do_jump   = isJ | isJAL | take_bex;
-    wire do_jr     = isJR;
-
-    // override pc_d
-    wire [31:0] pc_next =
-        do_jr ? pc_jr :
-        do_jump ? pc_jmp :
-        do_branch ? pc_br :
-        pc_seq;
-
-    // route to DFFs
-    // reusing pc_bits above via pc_d
-    // so replace the earlier assign
-    // note: this is a wire to wire replace
-    // keep one driver
-    // therefore we shadowed pc_d as a wire above
-    // drive it here
-    // synthesis keeps last continuous assign
-    assign pc_d = pc_next;
 
     // % Write back
     wire ovAdd  = r_add & aluOv;
@@ -263,28 +183,11 @@ module processor(
     wire [31:0] rstatVal = ovAdd ? 32'd1 : ovAddi ? 32'd2 : ovSub ? 32'd3 : 32'd0;
     wire willWriteRS = ovAdd | ovAddi | ovSub;
 
-    // base WB from R ADDI LW
-    wire [31:0] wbVal_base = isLW ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
-    wire [4:0]  wbReg_base = (isR | isADDI | isLW) ? rd : 5'd0;
-    wire        we_base    = (isR | isADDI | isLW);
-
-    // add JAL and SETX
-    wire [31:0] wbVal_jal = pc_plus_one;
-    wire [4:0]  wbReg_jal = 5'd31;
-
-    wire use_jal = isJAL;
-
-    wire [31:0] wbVal_pre = use_jal ? wbVal_jal : wbVal_base;
-    wire [4:0]  wbReg_pre = use_jal ? wbReg_jal : wbReg_base;
-    wire        we_pre    = we_base | use_jal | isSETX;
-
-    wire [31:0] wdat_norst = isSETX ? T32 : wbVal_pre;
-    wire [4:0]  wreg_norst = isSETX ? 5'd30 : wbReg_pre;
-
-    // exceptions to rstatus take precedence
-    wire [31:0] wdatFinal = willWriteRS ? rstatVal : wdat_norst;
-    wire [4:0]  wregFinal = willWriteRS ? 5'd30 : wreg_norst;
-    wire        weFinal   = willWriteRS | we_pre;
+    wire [31:0] wbVal = isLW ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
+    wire [4:0] wbReg = (isR | isADDI | isLW) ? rd : 5'd0;
+    wire weFinal = willWriteRS | (isR | isADDI | isLW);
+    wire [4:0] wregFinal = willWriteRS ? 5'd30 : wbReg;
+    wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
 
     // * Write enable control
     wire nz_wreg = |wregFinal;
