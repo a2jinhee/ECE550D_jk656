@@ -1,3 +1,52 @@
+/**
+ * READ THIS DESCRIPTION!
+ *
+ * The processor takes in several inputs from a skeleton file.
+ *
+ * Inputs
+ * clock: this is the clock for your processor at 50 MHz
+ * reset: we should be able to assert a reset to start your pc from 0 (sync or
+ * async is fine)
+ *
+ * Imem: input data from imem
+ * Dmem: input data from dmem
+ * Regfile: input data from regfile
+ *
+ * Outputs
+ * Imem: output control signals to interface with imem
+ * Dmem: output control signals and data to interface with dmem
+ * Regfile: output control signals and data to interface with regfile
+ *
+ * Notes
+ *
+ * Ultimately, your processor will be tested by subsituting a master skeleton, imem, dmem, so the
+ * testbench can see which controls signal you active when. Therefore, there needs to be a way to
+ * "inject" imem, dmem, and regfile interfaces from some external controller module. The skeleton
+ * file acts as a small wrapper around your processor for this purpose.
+ *
+ * You will need to figure out how to instantiate two memory elements, called
+ * "syncram," in Quartus: one for imem and one for dmem. Each should take in a
+ * 12-bit address and allow for storing a 32-bit value at each address. Each
+ * should have a single clock.
+ *
+ * Each memory element should have a corresponding .mif file that initializes
+ * the memory element to certain value on start up. These should be named
+ * imem.mif and dmem.mif respectively.
+ *
+ * Importantly, these .mif files should be placed at the top level, i.e. there
+ * should be an imem.mif and a dmem.mif at the same level as process.v. You
+ * should figure out how to point your generated imem.v and dmem.v files at
+ * these MIF files.
+ *
+ * imem
+ * Inputs:  12-bit address, 1-bit clock enable, and a clock
+ * Outputs: 32-bit instruction
+ *
+ * dmem
+ * Inputs:  12-bit address, 1-bit clock, 32-bit data, 1-bit write enable
+ * Outputs: 32-bit data at the given address
+ *
+ */
 module processor(
     // Control signals
     clock,                          // I: The master clock
@@ -42,21 +91,18 @@ module processor(
     input [31:0] data_readRegA, data_readRegB;
 
     /* YOUR CODE STARTS HERE */
-    // % Program counter (PC) and instruction fetch
+    // % Program counter and fetch
     wire [31:0] pc_q, pc_plus_one, pc_d;
     wire [31:0] const_one = 32'd1;
 
-    alu alu_pc(.data_operandA(pc_q), .data_operandB(const_one), .ctrl_ALUopcode(5'b00000),
-               .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one), .isNotEqual(), .isLessThan(), .overflow());
-
-    // pc_d will be selected below after branch or jump logic
-    // default next is pc_plus_one
-    assign pc_d =
-        take_bex        ? tgt32 :
-        use_jr          ? jr_target :
-        use_tgt32       ? tgt32 :
-        use_br          ? pc_plus_one_plus_imm :
-                        pc_plus_one;
+    alu alu_pc(
+        .data_operandA(pc_q),
+        .data_operandB(const_one),
+        .ctrl_ALUopcode(5'b00000),
+        .ctrl_shiftamt(5'b00000),
+        .data_result(pc_plus_one),
+        .isNotEqual(), .isLessThan(), .overflow()
+    );
 
     genvar i;
     generate
@@ -67,11 +113,10 @@ module processor(
 
     assign address_imem = pc_q[11:0];
 
-    // % Instruction decode: extract fields
+    // % Instruction fields
     wire [31:0] instr = q_imem;
     wire [4:0] opcode = instr[31:27];
     wire [4:0] rd = instr[26:22];
-    wire [4:5] _unused_pad = 2'b00; // keeps width comments stable
     wire [4:0] rs = instr[21:17];
     wire [4:0] rt = instr[16:12];
     wire [4:0] shamt = instr[11:7];
@@ -81,10 +126,9 @@ module processor(
     wire [26:0] tgt27 = instr[26:0];
     wire [31:0] tgt32 = {5'b00000, tgt27};
 
-    // % Control signal generation
-    // * opcode decodes
+    // % Opcode decodes
     wire [4:0] op_eq_R     = ~(opcode ^ 5'b00000);
-    wire [4:0] op_eq_J     = ~(opcode ^ 5'b00001); // j T
+    wire [4:0] op_eq_J     = ~(opcode ^ 5'b00001); // j
     wire [4:0] op_eq_BNE   = ~(opcode ^ 5'b00010); // bne
     wire [4:0] op_eq_JAL   = ~(opcode ^ 5'b00011); // jal
     wire [4:0] op_eq_JR    = ~(opcode ^ 5'b00100); // jr
@@ -107,7 +151,7 @@ module processor(
     wire isSETX = &op_eq_SETX;
     wire isBEX  = &op_eq_BEX;
 
-    // * func decodes for R type
+    // % Func decodes for R type
     wire [4:0] fn_eq_ADD = ~(func ^ 5'b00000);
     wire [4:0] fn_eq_SUB = ~(func ^ 5'b00001);
     wire [4:0] fn_eq_AND = ~(func ^ 5'b00010);
@@ -128,14 +172,12 @@ module processor(
     wire r_sll = isR & fSLL;
     wire r_sra = isR & fSRA;
 
-    // Regfile ports
-    // A port source: rs normally, rd for jr, r30 for bex
-    wire selA_isJR   = isJR;
-    wire selA_isBEX  = isBEX;
-    wire [4:0] readA_jr = selA_isJR ? rd : rs;
-    assign ctrl_readRegA = selA_isBEX ? 5'd30 : readA_jr;
+    // % Regfile port selection
+    // A port: rs normally, rd for jr, r30 for bex
+    wire [4:0] readA_jr = isJR ? rd : rs;
+    assign ctrl_readRegA = isBEX ? 5'd30 : readA_jr;
 
-    // B port source: rd for sw, bne, blt; else rt
+    // B port: rd for sw bne blt, else rt
     wire useB_rd_sw   = isSW;
     wire useB_rd_brz  = isBNE | isBLT;
     wire useB_rd_any  = useB_rd_sw | useB_rd_brz;
@@ -144,7 +186,7 @@ module processor(
     // % Execute
     wire [31:0] aluA = data_readRegA;
 
-    // immediate and branch selects as wires to satisfy style rule
+    // B operand select
     wire useImm     = isADDI | isSW | isLW;
     wire useBranchB = isBNE | isBLT;
 
@@ -154,51 +196,66 @@ module processor(
         useBranchB ? data_readRegB :
                      32'b0;
 
+    // ALU op select, force SUB on branches
     wire [4:0] aluOp = r_add ? 5'b00000 :
-                        r_sub ? 5'b00001 :
-                        r_and ? 5'b00010 :
-                        r_or  ? 5'b00011 :
-                        r_sll ? 5'b00100 :
-                        r_sra ? 5'b00101 :
-                        5'b00000;
+                       r_sub ? 5'b00001 :
+                       r_and ? 5'b00010 :
+                       r_or  ? 5'b00011 :
+                       r_sll ? 5'b00100 :
+                       r_sra ? 5'b00101 :
+                               5'b00000;
 
-    // force SUB when doing branch compares
     wire useBranchOp = isBNE | isBLT;
     wire [4:0] aluOp_final = useBranchOp ? 5'b00001 : aluOp;
 
     wire [31:0] aluOut;
     wire aluNe, aluLt, aluOv;
 
-    alu exec_alu(.data_operandA(aluA), .data_operandB(aluB), .ctrl_ALUopcode(aluOp_final),
-                        .ctrl_shiftamt(shamt), .data_result(aluOut), .isNotEqual(aluNe),
-                        .isLessThan(aluLt), .overflow(aluOv));
+    alu exec_alu(
+        .data_operandA(aluA),
+        .data_operandB(aluB),
+        .ctrl_ALUopcode(aluOp_final),
+        .ctrl_shiftamt(shamt),
+        .data_result(aluOut),
+        .isNotEqual(aluNe),
+        .isLessThan(aluLt),
+        .overflow(aluOv)
+    );
 
+    // Dmem interface
     assign address_dmem = aluOut[11:0];
     assign data = data_readRegB;
     assign wren = isSW;
 
-    // % Branch target PC + 1 + imm using ALU adder
+    // % Branch target PC + 1 + imm
     wire [31:0] pc_plus_one_plus_imm;
-    alu alu_pc_br(.data_operandA(pc_plus_one), .data_operandB(imm32), .ctrl_ALUopcode(5'b00000),
-                  .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one_plus_imm), .isNotEqual(), .isLessThan(), .overflow());
+    alu alu_pc_br(
+        .data_operandA(pc_plus_one),
+        .data_operandB(imm32),
+        .ctrl_ALUopcode(5'b00000),
+        .ctrl_shiftamt(5'b00000),
+        .data_result(pc_plus_one_plus_imm),
+        .isNotEqual(), .isLessThan(), .overflow()
+    );
 
     // % Branch and jump decisions
     wire take_bne = isBNE & aluNe;
     wire take_blt = isBLT & aluLt;
 
-    // bex condition: rstatus on A port nonzero
+    // bex when rstatus != 0  A port is r30 when isBEX
     wire a_is_zero = ~(|data_readRegA);
     wire take_bex  = isBEX & ~a_is_zero;
 
-    // jr target comes from A port when isJR
+    // jr target from A port when isJR
     wire [31:0] jr_target = data_readRegA;
 
-    // pc_next with priority: bex, jr, j or jal, branches, default pc_plus_one
+    // select helpers
     wire use_tgt32 = isJ | isJAL | take_bex;
     wire use_jr    = isJR;
     wire use_br    = take_bne | take_blt;
 
-    wire [31:0] pc_next =
+    // % Next PC
+    assign pc_d =
         take_bex        ? tgt32 :
         use_jr          ? jr_target :
         use_tgt32       ? tgt32 :
@@ -225,7 +282,7 @@ module processor(
     wire [31:0] setxVal = tgt32;
     wire [4:0] setxReg = 5'd30;
 
-    // combine writes, overflow has precedence to r30
+    // combine writes, overflow to r30 has precedence
     wire willWriteCore = (isR | isADDI | isLW);
     wire anyWriteNoOVF = willWriteCore | willWriteJAL | willWriteSETX;
 
