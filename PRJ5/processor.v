@@ -91,32 +91,29 @@ module processor(
     input [31:0] data_readRegA, data_readRegB;
 
     /* YOUR CODE STARTS HERE */
-    // % Program counter and fetch
+    // % Program counter (PC) and instruction fetch
     wire [31:0] pc_q, pc_plus_one, pc_d;
     wire [31:0] const_one = 32'd1;
 
-    alu alu_pc(
-        .data_operandA(pc_q),
-        .data_operandB(const_one),
-        .ctrl_ALUopcode(5'b00000),
-        .ctrl_shiftamt(5'b00000),
-        .data_result(pc_plus_one),
-        .isNotEqual(), .isLessThan(), .overflow()
-    );
+    alu alu_pc(.data_operandA(pc_q), .data_operandB(const_one), .ctrl_ALUopcode(5'b00000),
+               .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one), .isNotEqual(), .isLessThan(), .overflow());
+
+    assign pc_d = pc_plus_one;
 
     genvar i;
     generate
         for(i = 0; i < 32; i = i + 1) begin: pc_bits
-            dffe_ref pc_reg(.q(pc_q[i]), .d(pc_d[i]), .clk(clock), .en(1'b1), .clr(reset));
+            dffe_ref pc_reg(.q(pc_q[i]), .d(pc_next[i]), .clk(clock), .en(1'b1), .clr(reset));
         end
     endgenerate
 
     assign address_imem = pc_q[11:0];
 
-    // % Instruction fields
+    // % Instruction decode: extract fields
     wire [31:0] instr = q_imem;
     wire [4:0] opcode = instr[31:27];
     wire [4:0] rd = instr[26:22];
+    wire [4:5] _unused_pad = 2'b00; // keeps width comments stable
     wire [4:0] rs = instr[21:17];
     wire [4:0] rt = instr[16:12];
     wire [4:0] shamt = instr[11:7];
@@ -126,9 +123,10 @@ module processor(
     wire [26:0] tgt27 = instr[26:0];
     wire [31:0] tgt32 = {5'b00000, tgt27};
 
-    // % Opcode decodes
+    // % Control signal generation
+    // * opcode decodes
     wire [4:0] op_eq_R     = ~(opcode ^ 5'b00000);
-    wire [4:0] op_eq_J     = ~(opcode ^ 5'b00001); // j
+    wire [4:0] op_eq_J     = ~(opcode ^ 5'b00001); // j T
     wire [4:0] op_eq_BNE   = ~(opcode ^ 5'b00010); // bne
     wire [4:0] op_eq_JAL   = ~(opcode ^ 5'b00011); // jal
     wire [4:0] op_eq_JR    = ~(opcode ^ 5'b00100); // jr
@@ -151,7 +149,7 @@ module processor(
     wire isSETX = &op_eq_SETX;
     wire isBEX  = &op_eq_BEX;
 
-    // % Func decodes for R type
+    // * func decodes for R type
     wire [4:0] fn_eq_ADD = ~(func ^ 5'b00000);
     wire [4:0] fn_eq_SUB = ~(func ^ 5'b00001);
     wire [4:0] fn_eq_AND = ~(func ^ 5'b00010);
@@ -172,24 +170,23 @@ module processor(
     wire r_sll = isR & fSLL;
     wire r_sra = isR & fSRA;
 
-    // % Regfile port selection
-    // A port: rs normally, rd for jr, rd for blt, r30 for bex
-    wire [4:0] readA_sel = isJR ? rd : (isBLT ? rd : rs);
-    assign ctrl_readRegA = isBEX ? 5'd30 : readA_sel;
+    // Regfile ports
+    // A port source: rs normally, rd for jr, r30 for bex
+    wire selA_isJR   = isJR;
+    wire selA_isBEX  = isBEX;
+    wire [4:0] readA_jr = selA_isJR ? rd : rs;
+    assign ctrl_readRegA = selA_isBEX ? 5'd30 : readA_jr;
 
-    // B port: rd for sw and bne, rs for blt, else rt
-    wire [4:0] readB_sel = isBLT ? rs : rd;
-    wire useB_rd_sw  = isSW;
-    wire useB_rd_bne = isBNE;
-    wire useB_br_any = isBLT | isBNE;
-    assign ctrl_readRegB = useB_rd_sw ? rd :
-                        useB_br_any ? readB_sel :
-                                        rt;
+    // B port source: rd for sw, bne, blt; else rt
+    wire useB_rd_sw   = isSW;
+    wire useB_rd_brz  = isBNE | isBLT;
+    wire useB_rd_any  = useB_rd_sw | useB_rd_brz;
+    assign ctrl_readRegB = useB_rd_any ? rd : rt;
 
     // % Execute
     wire [31:0] aluA = data_readRegA;
 
-    // B operand select
+    // immediate and branch selects as wires to satisfy style rule
     wire useImm     = isADDI | isSW | isLW;
     wire useBranchB = isBNE | isBLT;
 
@@ -199,66 +196,51 @@ module processor(
         useBranchB ? data_readRegB :
                      32'b0;
 
-    // ALU op select, force SUB on branches
     wire [4:0] aluOp = r_add ? 5'b00000 :
-                       r_sub ? 5'b00001 :
-                       r_and ? 5'b00010 :
-                       r_or  ? 5'b00011 :
-                       r_sll ? 5'b00100 :
-                       r_sra ? 5'b00101 :
-                               5'b00000;
+                        r_sub ? 5'b00001 :
+                        r_and ? 5'b00010 :
+                        r_or  ? 5'b00011 :
+                        r_sll ? 5'b00100 :
+                        r_sra ? 5'b00101 :
+                        5'b00000;
 
+    // force SUB when doing branch compares
     wire useBranchOp = isBNE | isBLT;
     wire [4:0] aluOp_final = useBranchOp ? 5'b00001 : aluOp;
 
     wire [31:0] aluOut;
     wire aluNe, aluLt, aluOv;
 
-    alu exec_alu(
-        .data_operandA(aluA),
-        .data_operandB(aluB),
-        .ctrl_ALUopcode(aluOp_final),
-        .ctrl_shiftamt(shamt),
-        .data_result(aluOut),
-        .isNotEqual(aluNe),
-        .isLessThan(aluLt),
-        .overflow(aluOv)
-    );
+    alu exec_alu(.data_operandA(aluA), .data_operandB(aluB), .ctrl_ALUopcode(aluOp_final),
+                        .ctrl_shiftamt(shamt), .data_result(aluOut), .isNotEqual(aluNe),
+                        .isLessThan(aluLt), .overflow(aluOv));
 
-    // Dmem interface
     assign address_dmem = aluOut[11:0];
     assign data = data_readRegB;
     assign wren = isSW;
 
-    // % Branch target PC + 1 + imm
+    // % Branch target PC + 1 + imm using ALU adder
     wire [31:0] pc_plus_one_plus_imm;
-    alu alu_pc_br(
-        .data_operandA(pc_plus_one),
-        .data_operandB(imm32),
-        .ctrl_ALUopcode(5'b00000),
-        .ctrl_shiftamt(5'b00000),
-        .data_result(pc_plus_one_plus_imm),
-        .isNotEqual(), .isLessThan(), .overflow()
-    );
+    alu alu_pc_br(.data_operandA(pc_plus_one), .data_operandB(imm32), .ctrl_ALUopcode(5'b00000),
+                  .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one_plus_imm), .isNotEqual(), .isLessThan(), .overflow());
 
     // % Branch and jump decisions
     wire take_bne = isBNE & aluNe;
     wire take_blt = isBLT & aluLt;
 
-    // bex when rstatus != 0  A port is r30 when isBEX
+    // bex condition: rstatus on A port nonzero
     wire a_is_zero = ~(|data_readRegA);
     wire take_bex  = isBEX & ~a_is_zero;
 
-    // jr target from A port when isJR
+    // jr target comes from A port when isJR
     wire [31:0] jr_target = data_readRegA;
 
-    // select helpers
+    // pc_next with priority: bex, jr, j or jal, branches, default pc_plus_one
     wire use_tgt32 = isJ | isJAL | take_bex;
     wire use_jr    = isJR;
     wire use_br    = take_bne | take_blt;
 
-    // % Next PC
-    assign pc_d =
+    wire [31:0] pc_next =
         take_bex        ? tgt32 :
         use_jr          ? jr_target :
         use_tgt32       ? tgt32 :
@@ -285,7 +267,7 @@ module processor(
     wire [31:0] setxVal = tgt32;
     wire [4:0] setxReg = 5'd30;
 
-    // combine writes, overflow to r30 has precedence
+    // combine writes, overflow has precedence to r30
     wire willWriteCore = (isR | isADDI | isLW);
     wire anyWriteNoOVF = willWriteCore | willWriteJAL | willWriteSETX;
 
