@@ -1,3 +1,52 @@
+/**
+ * READ THIS DESCRIPTION!
+ *
+ * The processor takes in several inputs from a skeleton file.
+ *
+ * Inputs
+ * clock: this is the clock for your processor at 50 MHz
+ * reset: we should be able to assert a reset to start your pc from 0 (sync or
+ * async is fine)
+ *
+ * Imem: input data from imem
+ * Dmem: input data from dmem
+ * Regfile: input data from regfile
+ *
+ * Outputs
+ * Imem: output control signals to interface with imem
+ * Dmem: output control signals and data to interface with dmem
+ * Regfile: output control signals and data to interface with regfile
+ *
+ * Notes
+ *
+ * Ultimately, your processor will be tested by subsituting a master skeleton, imem, dmem, so the
+ * testbench can see which controls signal you active when. Therefore, there needs to be a way to
+ * "inject" imem, dmem, and regfile interfaces from some external controller module. The skeleton
+ * file acts as a small wrapper around your processor for this purpose.
+ *
+ * You will need to figure out how to instantiate two memory elements, called
+ * "syncram," in Quartus: one for imem and one for dmem. Each should take in a
+ * 12-bit address and allow for storing a 32-bit value at each address. Each
+ * should have a single clock.
+ *
+ * Each memory element should have a corresponding .mif file that initializes
+ * the memory element to certain value on start up. These should be named
+ * imem.mif and dmem.mif respectively.
+ *
+ * Importantly, these .mif files should be placed at the top level, i.e. there
+ * should be an imem.mif and a dmem.mif at the same level as process.v. You
+ * should figure out how to point your generated imem.v and dmem.v files at
+ * these MIF files.
+ *
+ * imem
+ * Inputs:  12-bit address, 1-bit clock enable, and a clock
+ * Outputs: 32-bit instruction
+ *
+ * dmem
+ * Inputs:  12-bit address, 1-bit clock, 32-bit data, 1-bit write enable
+ * Outputs: 32-bit data at the given address
+ *
+ */
 module processor(
     // Control signals
     clock,                          // I: The master clock
@@ -49,8 +98,6 @@ module processor(
     alu alu_pc(.data_operandA(pc_q), .data_operandB(const_one), .ctrl_ALUopcode(5'b00000),
                .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one), .isNotEqual(), .isLessThan(), .overflow());
 
-    // pc_d will be selected below after branch or jump logic
-    // default next is pc_plus_one
     assign pc_d = pc_plus_one;
 
     genvar i;
