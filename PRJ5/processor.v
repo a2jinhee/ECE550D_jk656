@@ -98,7 +98,30 @@ module processor(
     alu alu_pc(.data_operandA(pc_q), .data_operandB(const_one), .ctrl_ALUopcode(5'b00000),
                .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one), .isNotEqual(), .isLessThan(), .overflow());
 
-    assign pc_d = pc_plus_one;
+    // assign pc_d = pc_plus_one;
+    // Branch and jump PC logic
+    wire [31:0] branch_addr;
+    alu alu_branch(.data_operandA(pc_plus_one),
+                .data_operandB(imm32),
+                .ctrl_ALUopcode(5'b00000),
+                .ctrl_shiftamt(5'b00000),
+                .data_result(branch_addr),
+                .isNotEqual(), .isLessThan(), .overflow());
+
+    wire bne_cond = isBNE & aluNe;
+    wire blt_cond = isBLT & aluLt;
+    wire bex_cond = isBEX & (|data_readRegA); // use $rstatus from regA
+    wire branch_taken = bne_cond | blt_cond;
+
+    wire [31:0] pc_branch = branch_taken ? branch_addr : pc_plus_one;
+    wire [31:0] pc_jump =
+        (isJ | bex_cond) ? target_ext :
+        isJAL            ? target_ext :
+        isJR             ? data_readRegA :
+        pc_branch;
+
+    assign pc_d = pc_jump;
+    // // // // // //
 
     genvar i;
     generate
@@ -120,6 +143,10 @@ module processor(
     wire [16:0] imm17 = instr[16:0];
     wire [31:0] imm32 = {{15{imm17[16]}}, imm17};
 
+    // J-type target field extraction
+    wire [26:0] target = instr[26:0];
+    wire [31:0] target_ext = {5'b0, target};
+
     // % Control signal generation
     // * opcode decodes
     wire [4:0] op_eq_R     = ~(opcode ^ 5'b00000);
@@ -131,6 +158,23 @@ module processor(
     wire isADDI = &op_eq_ADDI;
     wire isSW   = &op_eq_SW;
     wire isLW   = &op_eq_LW;
+
+    wire [4:0] op_eq_J     = ~(opcode ^ 5'b00001);
+    wire [4:0] op_eq_BNE   = ~(opcode ^ 5'b00010);
+    wire [4:0] op_eq_JAL   = ~(opcode ^ 5'b00011);
+    wire [4:0] op_eq_JR    = ~(opcode ^ 5'b00100);
+    wire [4:0] op_eq_BLT   = ~(opcode ^ 5'b00110);
+    wire [4:0] op_eq_SETX  = ~(opcode ^ 5'b10101);
+    wire [4:0] op_eq_BEX   = ~(opcode ^ 5'b10110);
+
+    wire isJ    = &op_eq_J;
+    wire isBNE  = &op_eq_BNE;
+    wire isJAL  = &op_eq_JAL;
+    wire isJR   = &op_eq_JR;
+    wire isBLT  = &op_eq_BLT;
+    wire isSETX = &op_eq_SETX;
+    wire isBEX  = &op_eq_BEX;
+    
 
     // * func decodes for R type
     wire [4:0] fn_eq_ADD = ~(func ^ 5'b00000);
@@ -152,7 +196,8 @@ module processor(
     wire r_or  = isR & fOR;
     wire r_sll = isR & fSLL;
     wire r_sra = isR & fSRA;
-    assign ctrl_readRegA = rs;
+    // assign ctrl_readRegA = rs;
+    assign ctrl_readRegA = (isJR | isBNE | isBLT | isBEX) ? rd : rs;
     assign ctrl_readRegB = isSW ? rd : rt;
 
     // % Execute
@@ -183,11 +228,28 @@ module processor(
     wire [31:0] rstatVal = ovAdd ? 32'd1 : ovAddi ? 32'd2 : ovSub ? 32'd3 : 32'd0;
     wire willWriteRS = ovAdd | ovAddi | ovSub;
 
-    wire [31:0] wbVal = isLW ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
-    wire [4:0] wbReg = (isR | isADDI | isLW) ? rd : 5'd0;
-    wire weFinal = willWriteRS | (isR | isADDI | isLW);
-    wire [4:0] wregFinal = willWriteRS ? 5'd30 : wbReg;
-    wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
+    // wire [31:0] wbVal = isLW ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
+    // wire [4:0] wbReg = (isR | isADDI | isLW) ? rd : 5'd0;
+    // wire weFinal = willWriteRS | (isR | isADDI | isLW);
+    // wire [4:0] wregFinal = willWriteRS ? 5'd30 : wbReg;
+    // wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
+    wire [31:0] setx_val = target_ext;
+    wire [4:0]  setx_reg = 5'd30;
+    wire [31:0] jal_val  = pc_plus_one;
+    wire [4:0]  jal_reg  = 5'd31;
+    wire we_setx = isSETX;
+    wire we_jal  = isJAL;
+
+    wire weFinal = willWriteRS | (isR | isADDI | isLW | we_setx | we_jal);
+    wire [4:0] wregFinal = willWriteRS ? 5'd30 :
+                        we_setx     ? setx_reg :
+                        we_jal      ? jal_reg :
+                        (isR | isADDI | isLW) ? rd : 5'd0;
+
+    wire [31:0] wdatFinal = willWriteRS ? rstatVal :
+                            we_setx     ? setx_val :
+                            we_jal      ? jal_val :
+                            isLW ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
 
     // * Write enable control
     wire nz_wreg = |wregFinal;
