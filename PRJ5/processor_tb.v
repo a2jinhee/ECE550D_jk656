@@ -50,8 +50,8 @@ module processor_tb;
   wire [11:0] pc_addr     = `CPU_SCOPE.address_imem;  // lower 12 bits of PC
   wire [31:0] instr_word  = `CPU_SCOPE.q_imem;
 
-  // Simple done detection: end loop at absolute address 17
-  localparam [11:0] END_PC = 12'd17;
+  // Simple done detection
+  localparam [11:0] END_PC = 12'd24;
 
   initial begin
     for (i = 0; i < 32; i = i + 1) rf_shadow[i] = 32'b0;
