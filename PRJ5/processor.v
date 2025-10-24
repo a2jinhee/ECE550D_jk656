@@ -51,12 +51,17 @@ module processor(
 
     // pc_d will be selected below after branch or jump logic
     // default next is pc_plus_one
-    assign pc_d = pc_plus_one;
+    assign pc_d =
+        take_bex        ? tgt32 :
+        use_jr          ? jr_target :
+        use_tgt32       ? tgt32 :
+        use_br          ? pc_plus_one_plus_imm :
+                        pc_plus_one;
 
     genvar i;
     generate
         for(i = 0; i < 32; i = i + 1) begin: pc_bits
-            dffe_ref pc_reg(.q(pc_q[i]), .d(pc_next[i]), .clk(clock), .en(1'b1), .clr(reset));
+            dffe_ref pc_reg(.q(pc_q[i]), .d(pc_d[i]), .clk(clock), .en(1'b1), .clr(reset));
         end
     endgenerate
 
