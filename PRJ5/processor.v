@@ -103,7 +103,7 @@ module processor(
     genvar i;
     generate
         for(i = 0; i < 32; i = i + 1) begin: pc_bits
-            dffe_ref pc_reg(.q(pc_q[i]), .d(pc_next[i]), .clk(clock), .en(1'b1), .clr(reset));
+            dffe_ref pc_reg(.q(pc_q[i]), .d(pc_d[i]), .clk(clock), .en(1'b1), .clr(reset));
         end
     endgenerate
 
@@ -113,41 +113,24 @@ module processor(
     wire [31:0] instr = q_imem;
     wire [4:0] opcode = instr[31:27];
     wire [4:0] rd = instr[26:22];
-    wire [4:5] _unused_pad = 2'b00; // keeps width comments stable
     wire [4:0] rs = instr[21:17];
     wire [4:0] rt = instr[16:12];
     wire [4:0] shamt = instr[11:7];
     wire [4:0] func = instr[6:2];
     wire [16:0] imm17 = instr[16:0];
     wire [31:0] imm32 = {{15{imm17[16]}}, imm17};
-    wire [26:0] tgt27 = instr[26:0];
-    wire [31:0] tgt32 = {5'b00000, tgt27};
 
     // % Control signal generation
     // * opcode decodes
     wire [4:0] op_eq_R     = ~(opcode ^ 5'b00000);
-    wire [4:0] op_eq_J     = ~(opcode ^ 5'b00001); // j T
-    wire [4:0] op_eq_BNE   = ~(opcode ^ 5'b00010); // bne
-    wire [4:0] op_eq_JAL   = ~(opcode ^ 5'b00011); // jal
-    wire [4:0] op_eq_JR    = ~(opcode ^ 5'b00100); // jr
     wire [4:0] op_eq_ADDI  = ~(opcode ^ 5'b00101);
-    wire [4:0] op_eq_BLT   = ~(opcode ^ 5'b00110); // blt
     wire [4:0] op_eq_SW    = ~(opcode ^ 5'b00111);
     wire [4:0] op_eq_LW    = ~(opcode ^ 5'b01000);
-    wire [4:0] op_eq_SETX  = ~(opcode ^ 5'b10101); // setx
-    wire [4:0] op_eq_BEX   = ~(opcode ^ 5'b10110); // bex
 
     wire isR    = &op_eq_R;
-    wire isJ    = &op_eq_J;
-    wire isBNE  = &op_eq_BNE;
-    wire isJAL  = &op_eq_JAL;
-    wire isJR   = &op_eq_JR;
     wire isADDI = &op_eq_ADDI;
-    wire isBLT  = &op_eq_BLT;
     wire isSW   = &op_eq_SW;
     wire isLW   = &op_eq_LW;
-    wire isSETX = &op_eq_SETX;
-    wire isBEX  = &op_eq_BEX;
 
     // * func decodes for R type
     wire [4:0] fn_eq_ADD = ~(func ^ 5'b00000);
@@ -169,33 +152,12 @@ module processor(
     wire r_or  = isR & fOR;
     wire r_sll = isR & fSLL;
     wire r_sra = isR & fSRA;
-
-    // Regfile ports
-    // A port source: rs normally, rd for jr, r30 for bex
-    wire selA_isJR   = isJR;
-    wire selA_isBEX  = isBEX;
-    wire [4:0] readA_jr = selA_isJR ? rd : rs;
-    assign ctrl_readRegA = selA_isBEX ? 5'd30 : readA_jr;
-
-    // B port source: rd for sw, bne, blt; else rt
-    wire useB_rd_sw   = isSW;
-    wire useB_rd_brz  = isBNE | isBLT;
-    wire useB_rd_any  = useB_rd_sw | useB_rd_brz;
-    assign ctrl_readRegB = useB_rd_any ? rd : rt;
+    assign ctrl_readRegA = rs;
+    assign ctrl_readRegB = isSW ? rd : rt;
 
     // % Execute
     wire [31:0] aluA = data_readRegA;
-
-    // immediate and branch selects as wires to satisfy style rule
-    wire useImm     = isADDI | isSW | isLW;
-    wire useBranchB = isBNE | isBLT;
-
-    wire [31:0] aluB =
-        isR        ? data_readRegB :
-        useImm     ? imm32 :
-        useBranchB ? data_readRegB :
-                     32'b0;
-
+    wire [31:0] aluB = (isR) ? data_readRegB : (isADDI | isSW | isLW) ? imm32 : 32'b0;
     wire [4:0] aluOp = r_add ? 5'b00000 :
                         r_sub ? 5'b00001 :
                         r_and ? 5'b00010 :
@@ -203,49 +165,16 @@ module processor(
                         r_sll ? 5'b00100 :
                         r_sra ? 5'b00101 :
                         5'b00000;
-
-    // force SUB when doing branch compares
-    wire useBranchOp = isBNE | isBLT;
-    wire [4:0] aluOp_final = useBranchOp ? 5'b00001 : aluOp;
-
     wire [31:0] aluOut;
     wire aluNe, aluLt, aluOv;
 
-    alu exec_alu(.data_operandA(aluA), .data_operandB(aluB), .ctrl_ALUopcode(aluOp_final),
+    alu exec_alu(.data_operandA(aluA), .data_operandB(aluB), .ctrl_ALUopcode(aluOp),
                         .ctrl_shiftamt(shamt), .data_result(aluOut), .isNotEqual(aluNe),
                         .isLessThan(aluLt), .overflow(aluOv));
 
     assign address_dmem = aluOut[11:0];
     assign data = data_readRegB;
     assign wren = isSW;
-
-    // % Branch target PC + 1 + imm using ALU adder
-    wire [31:0] pc_plus_one_plus_imm;
-    alu alu_pc_br(.data_operandA(pc_plus_one), .data_operandB(imm32), .ctrl_ALUopcode(5'b00000),
-                  .ctrl_shiftamt(5'b00000), .data_result(pc_plus_one_plus_imm), .isNotEqual(), .isLessThan(), .overflow());
-
-    // % Branch and jump decisions
-    wire take_bne = isBNE & aluNe;
-    wire take_blt = isBLT & aluLt;
-
-    // bex condition: rstatus on A port nonzero
-    wire a_is_zero = ~(|data_readRegA);
-    wire take_bex  = isBEX & ~a_is_zero;
-
-    // jr target comes from A port when isJR
-    wire [31:0] jr_target = data_readRegA;
-
-    // pc_next with priority: bex, jr, j or jal, branches, default pc_plus_one
-    wire use_tgt32 = isJ | isJAL | take_bex;
-    wire use_jr    = isJR;
-    wire use_br    = take_bne | take_blt;
-
-    wire [31:0] pc_next =
-        take_bex        ? tgt32 :
-        use_jr          ? jr_target :
-        use_tgt32       ? tgt32 :
-        use_br          ? pc_plus_one_plus_imm :
-                          pc_plus_one;
 
     // % Write back
     wire ovAdd  = r_add & aluOv;
@@ -256,32 +185,9 @@ module processor(
 
     wire [31:0] wbVal = isLW ? q_dmem : (isR | isADDI) ? aluOut : 32'b0;
     wire [4:0] wbReg = (isR | isADDI | isLW) ? rd : 5'd0;
-
-    // jal writes r31 with pc_plus_one
-    wire willWriteJAL = isJAL;
-    wire [31:0] jalVal = pc_plus_one;
-    wire [4:0] jalReg = 5'd31;
-
-    // setx writes r30 with tgt32
-    wire willWriteSETX = isSETX;
-    wire [31:0] setxVal = tgt32;
-    wire [4:0] setxReg = 5'd30;
-
-    // combine writes, overflow has precedence to r30
-    wire willWriteCore = (isR | isADDI | isLW);
-    wire anyWriteNoOVF = willWriteCore | willWriteJAL | willWriteSETX;
-
-    wire [31:0] wdat_pre_ovf = willWriteSETX ? setxVal
-                               : willWriteJAL ? jalVal
-                               : wbVal;
-
-    wire [4:0]  wreg_pre_ovf = willWriteSETX ? setxReg
-                               : willWriteJAL ? jalReg
-                               : wbReg;
-
-    wire [31:0] wdatFinal = willWriteRS ? rstatVal : wdat_pre_ovf;
-    wire [4:0]  wregFinal = willWriteRS ? 5'd30    : wreg_pre_ovf;
-    wire        weFinal   = willWriteRS | anyWriteNoOVF;
+    wire weFinal = willWriteRS | (isR | isADDI | isLW);
+    wire [4:0] wregFinal = willWriteRS ? 5'd30 : wbReg;
+    wire [31:0] wdatFinal = willWriteRS ? rstatVal : wbVal;
 
     // * Write enable control
     wire nz_wreg = |wregFinal;
