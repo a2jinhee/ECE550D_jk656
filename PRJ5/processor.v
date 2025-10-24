@@ -173,15 +173,18 @@ module processor(
     wire r_sra = isR & fSRA;
 
     // % Regfile port selection
-    // A port: rs normally, rd for jr, r30 for bex
-    wire [4:0] readA_jr = isJR ? rd : rs;
-    assign ctrl_readRegA = isBEX ? 5'd30 : readA_jr;
+    // A port: rs normally, rd for jr, rd for blt, r30 for bex
+    wire [4:0] readA_sel = isJR ? rd : (isBLT ? rd : rs);
+    assign ctrl_readRegA = isBEX ? 5'd30 : readA_sel;
 
-    // B port: rd for sw bne blt, else rt
-    wire useB_rd_sw   = isSW;
-    wire useB_rd_brz  = isBNE | isBLT;
-    wire useB_rd_any  = useB_rd_sw | useB_rd_brz;
-    assign ctrl_readRegB = useB_rd_any ? rd : rt;
+    // B port: rd for sw and bne, rs for blt, else rt
+    wire [4:0] readB_sel = isBLT ? rs : rd;
+    wire useB_rd_sw  = isSW;
+    wire useB_rd_bne = isBNE;
+    wire useB_br_any = isBLT | isBNE;
+    assign ctrl_readRegB = useB_rd_sw ? rd :
+                        useB_br_any ? readB_sel :
+                                        rt;
 
     // % Execute
     wire [31:0] aluA = data_readRegA;
