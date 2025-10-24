@@ -1,63 +1,65 @@
-# Minimal jump and branch test
+# ==========================================================
+# Minimal jump / branch test for ECE550 single-cycle CPU
+# Each section increments r5 (score) if jump/branch worked.
+# ==========================================================
 
-start:
     addi $1,  $0, 1        # r1 = 1
     addi $2,  $0, 2        # r2 = 2
     addi $5,  $0, 0        # r5 = score counter
 
-    # j T  absolute jump
-    j L_j_ok
-    addi $6,  $0, 111      # should be skipped if j works
+# ----- 1. Test j -----
+    j  6                   # absolute jump to instruction index 6
+    addi $6, $0, 111       # skipped if j works
 
-L_j_ok:
-    addi $5,  $5, 1        # score += 1  j worked
+# target (PC = 6)
+    addi $5, $5, 1          # r5 = 1  (j worked)
 
-    # jal T  then jr $ra to return
-    jal L_sub               # $r31 = PC + 1, jump to L_sub
-    addi $7,  $0, 777       # runs only after jr $31 returns
+# ----- 2. Test jal / jr -----
+    jal 10                  # jump to instruction index 10
+    addi $7, $0, 777        # runs after jr returns
 
-    # bne not taken
-    bne  $1,  $1, 2         # not taken, next two lines run
-    addi $16, $0, 123       # executes
-    j    L_after_bne1       # skip the next line
-    addi $9,  $0, 999       # should be skipped
+# subroutine at index 10
+    addi $18, $0, 42        # mark subroutine executed
+    jr   $31                # return to PC+1 (jal return)
 
-L_after_bne1:
-    # bne taken
-    bne  $1,  $2, 1         # taken, skip next addi
-    addi $10, $0, 555       # skipped if branch works
-    addi $5,  $5, 1         # score += 1
+# return destination (PC+1 = 8)
+    addi $5, $5, 1          # r5 = 2  (jal/jr worked)
 
-    # blt taken
-    blt  $1,  $2, 1         # taken, skip next addi
-    addi $11, $0, 444       # skipped if blt works
-    addi $5,  $5, 1         # score += 1
+# ----- 3. Test bne (taken and not taken) -----
+    bne  $1, $1, 1          # not taken → executes next addi
+    addi $8, $0, 222        # executes
+    bne  $1, $2, 1          # taken → skips next addi
+    addi $9, $0, 999        # skipped
+    addi $5, $5, 1          # r5 = 3  (bne worked)
 
-    # blt not taken
-    blt  $2,  $1, 1         # not taken, do not skip next addi
-    addi $12, $0, 333       # executes
-    addi $5,  $5, 1         # score += 1
+# ----- 4. Test blt -----
+    blt  $1, $2, 1          # taken → skips next addi
+    addi $10, $0, 888       # skipped
+    addi $5,  $5, 1         # r5 = 4  (blt worked)
+    blt  $2, $1, 1          # not taken → executes next addi
+    addi $11, $0, 777       # executes
+    addi $5,  $5, 1         # r5 = 5  (blt not taken works)
 
-    # setx T and bex T
-    setx L_bex              # rstatus = address of L_bex  nonzero
-    bex  L_bex              # taken because rstatus != 0
-    addi $13, $0, 222       # should be skipped
-L_bex:
-    addi $5,  $5, 1         # score += 1
+# ----- 5. Test setx / bex -----
+    setx  30                # set rstatus = 30 (nonzero)
+    bex   27                # jump to instruction index 27 (target)
+    addi  $12, $0, 444      # skipped if bex works
 
-    setx 0                  # rstatus = 0
-    bex  L_should_not       # not taken because rstatus == 0
-    addi $14, $0, 111       # executes
-L_should_not:
+# target (index 27)
+    addi  $5,  $5, 1        # r5 = 6  (bex worked)
+    setx  0                 # clear rstatus = 0
+    bex   31                # not taken, skip to end
+    addi  $13, $0, 555      # executes
+    addi  $5,  $5, 1        # r5 = 7  (bex not taken works)
 
-    # final absolute jump to end
-    j    L_end
-    addi $15, $0, 999       # should be skipped
-
-L_end:
+# ----- 6. Final jump to end -----
+    j 33                    # absolute jump to end
+    addi $14, $0, 666       # skipped
+# end (PC = 33)
     addi $0,  $0, 0         # nop
 
-# Subroutine for jal and jr
-L_sub:
-    addi $18, $0, 42        # mark that subroutine ran
-    jr   $31                # return to PC saved by jal
+# ==========================================================
+# Expected register summary after simulation:
+# r1=1  r2=2  r5=7  r18=42  r8=222  r11=777  r13=555
+# rstatus=0  all others 0
+# ==========================================================
