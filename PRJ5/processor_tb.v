@@ -50,7 +50,6 @@ module processor_tb;
   wire [11:0] pc_addr    = `CPU_SCOPE.address_imem;  // low 12 bits of PC
   wire [31:0] instr_word = `CPU_SCOPE.q_imem;
 
-<<<<<<< HEAD
   // decode helpers on the fly
   wire [4:0]  opcode = instr_word[31:27];
   wire [26:0] Tfield = instr_word[26:0];
@@ -59,11 +58,7 @@ module processor_tb;
   wire [31:0] Nsext  = {{15{Nfield[16]}}, Nfield};
 
   // end condition for the demo program
-  localparam [11:0] END_PC = 12'd17;
-=======
-  // Simple done detection
   localparam [11:0] END_PC = 12'd24;
->>>>>>> 5bc225963e2753ba190708b318a046cd3391a3c8
 
   // previous cycle latches for checking next PC
   reg [11:0] pc_prev;
