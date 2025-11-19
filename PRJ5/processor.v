@@ -183,7 +183,8 @@ module processor(
 
     // % Branch and jump decisions
     wire bne_taken = isBNE & aluNe;
-    wire blt_taken = isBLT & ~aluLt;
+    wire blt_taken = isBLT & aluNe & ~aluLt;
+//	 wire blt_taken = isBLT & ~aluNe;
     wire takeBranch = bne_taken | blt_taken;
 
     // bex uses rstatus, nonzero check on data_readRegA since we redirected A to $r30
